@@ -6,42 +6,22 @@ from io import StringIO
 import matplotlib.pyplot as plt
 import seaborn as sns
 from textblob import TextBlob
-from nltk.sentiment import SentimentIntensityAnalyzer
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer  # Standalone VADER
 from nltk.tokenize import sent_tokenize, word_tokenize
 import re
-import nltk
-
-# NLTK data will be available on Streamlit Cloud via requirements.txt — no download needed at runtime
-# (Remove any nltk.download calls to avoid issues)
 
 class EnhancedSentimentAnalyzer:
     def __init__(self):
-        self.sia_base = SentimentIntensityAnalyzer()
-        self.sia_enh = SentimentIntensityAnalyzer()
-        
-        # Custom lexicon
+        self.sia_base = SentimentIntensityAnalyzer()  # Standalone VADER for base
+        self.sia_enh = SentimentIntensityAnalyzer()   # Same for enhanced
         enhanced_lexicon = {
             "fuel-efficient": 2.5, "overpriced": -3.0, "market crashed": -3.5, "bull market": 2.5,
             "yeah_right": -1.5, "as_if": -1.5, "not_bad": 1.5, "not_too_good": -1.5
         }
         self.sia_enh.lexicon.update(enhanced_lexicon)
-        
-        # Tuned thresholds as per your pipeline
-        self.thresholds = {
-            'pos_thr': 0.30,
-            'neg_thr': -0.05,
-            'strong_neg_thr': -0.25,
-            'strong_pos_thr': 0.45
-        }
-        
-        self.color_palette = {
-            "TextBlob": "#EF476F",
-            "VADER (Base)": "#118AB2",
-            "VADER (Enhanced)": "#06D6A0",
-            "negative": "#EF476F",
-            "neutral": "#FFD166",
-            "positive": "#06D6A0"
-        }
+        self.thresholds = {'pos_thr': 0.30, 'neg_thr': -0.05, 'strong_neg_thr': -0.25, 'strong_pos_thr': 0.45}
+        self.color_palette = {"TextBlob": "#EF476F", "VADER (Base)": "#118AB2", "VADER (Enhanced)": "#06D6A0",
+                              "negative": "#EF476F", "neutral": "#FFD166", "positive": "#06D6A0"}
 
     def predict(self, text):
         if not isinstance(text, str):
@@ -56,6 +36,7 @@ class EnhancedSentimentAnalyzer:
         vb = "positive" if vb_comp >= 0.05 else "negative" if vb_comp <= -0.05 else "neutral"
         
         # Enhanced VADER
+        text = self._preprocess_enh(text)
         sentences = sent_tokenize(text)
         comps = []
         weights = []
@@ -63,9 +44,9 @@ class EnhancedSentimentAnalyzer:
             vs = self.sia_enh.polarity_scores(s)
             comp = vs['compound']
             tokens = word_tokenize(s)
-            len_w = min(len(tokens) / 8.0, 3.0)
-            excl_w = 1.0 + min(s.count("!"), 3) * 0.15
-            caps_w = 1.0 + min(len([w for w in tokens if w.isalpha() and w.upper() == w and len(w) > 2]), 3) * 0.12
+            len_w = min(len(tokens)/8.0, 3.0)
+            excl_w = 1.0 + min(s.count("!"), 3)*0.15
+            caps_w = 1.0 + min(len([w for w in tokens if w.isalpha() and w.upper()==w and len(w)>2]), 3)*0.12
             weights.append(len_w * excl_w * caps_w)
             comps.append(comp)
         
@@ -86,13 +67,22 @@ class EnhancedSentimentAnalyzer:
         
         return tb, vb, ve, tb_pol, vb_comp, ve_score
 
-# Create the analyzer instance
+    def _preprocess_enh(self, text):
+        replacements = [
+            (r"\byeah right\b", " yeah_right "),
+            (r"\bas if\b", " as_if "),
+            (r"\bnot bad\b", " not_bad "),
+            (r"\bnot too good\b", " not_too_good "),
+        ]
+        for p, r in replacements:
+            text = re.sub(p, r, text, flags=re.IGNORECASE)
+        return text
+
 analyzer = EnhancedSentimentAnalyzer()
 
-# Page config
 st.set_page_config(page_title="Enhanced VADER Sentiment Analysis", layout="wide")
 
-# Beautiful header
+# Your beautiful header
 st.markdown("""
 <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;'>
     <h1 style='margin:0;'>🚀 Enhanced VADER Sentiment Analysis Deployment</h1>
@@ -111,8 +101,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Tabs
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Single Analysis", "📊 Batch Analysis", "📈 Performance", "📊 Visualizations"])
+tab1 = st.tabs(["🔍 Single Analysis"])[0]
 
 with tab1:
     st.markdown("<h2 style='color:#1e293b;'>🔍 Live Sentiment Analysis</h2>", unsafe_allow_html=True)
@@ -127,11 +116,11 @@ with tab1:
         ("Negative review: Complete waste of money", "This product is a complete waste of money. It broke after 2 days and customer service was unhelpful.")
     ]
     
-    selected = st.selectbox("Load Example:", [e[0] for e in examples], key="example_sel")
+    selected = st.selectbox("Load Example:", [e[0] for e in examples])
     selected_text = next((e[1] for e in examples if e[0] == selected), "")
-    text = st.text_area("Input Text:", value=selected_text, height=150, placeholder="Enter text for sentiment analysis...", key="text_input")
+    text = st.text_area("Input Text:", value=selected_text, height=150, placeholder="Enter text for sentiment analysis...")
     
-    if st.button("Analyze Sentiment", type="primary", key="analyze"):
+    if st.button("Analyze Sentiment", type="primary"):
         if text.strip():
             tb, vb, ve, tb_score, vb_score, ve_score = analyzer.predict(text)
             html = f"""
@@ -178,7 +167,6 @@ with tab1:
         else:
             st.error("Please enter some text.")
 
-# Advanced Tools at the bottom
 st.markdown("<h2 style='color:#1e293b;'>🛠 Advanced Deployment Tools</h2>", unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
