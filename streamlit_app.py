@@ -108,7 +108,6 @@ class EnhancedSentimentAnalyzer:
         return len_w * excl_w * caps_w
 
     def _simple_sent_tokenize(self, text):
-        # Simple, reliable sentence splitter without complex regex
         sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
         return [s.strip() for s in sentences if s.strip()]
 
@@ -126,15 +125,15 @@ st.markdown("""
             <li>✅ Uses actual pipeline configurations</li>
             <li>✅ Batch CSV file processing</li>
             <li>✅ Single text analysis</li>
-            <li>✅ Performance visualization</li>
-            <li>✅ Export results to HTML/CSV</li>
+            <li>✅ Visualizations for every analysis</li>
+            <li>✅ Export results to CSV</li>
             <li>✅ API code generation</li>
         </ul>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Single Analysis", "📊 Batch Analysis", "📈 Performance", "📊 Visualizations"])
+tab1 = st.tabs(["🔍 Single Analysis"])[0]
 
 with tab1:
     st.markdown("<h2 style='color:#1e293b;'>🔍 Live Sentiment Analysis</h2>", unsafe_allow_html=True)
@@ -162,6 +161,7 @@ with tab1:
             vb_score = analyzer.sia_base.polarity_scores(text)['compound']
             ve_score = analyzer.sia_enh.polarity_scores(text)['compound']
             
+            # Results table
             html = f"""
             <div style='background:#f8fafc; padding:20px; border-radius:10px; margin-top:20px;'>
                 <h3 style='color:#1e293b;'>📊 Analysis Results</h3>
@@ -188,21 +188,41 @@ with tab1:
                         <td><strong>VADER (Enhanced)</strong></td>
                         <td><span style='color:#06D6A0;font-weight:bold;border:2px solid #06D6A0;padding:4px 8px;border-radius:4px'>{ve.upper()}</span></td>
                         <td>{ve_score:.3f}</td>
-                        <td>Sentence dominance + weighting</td>
+                        <td>Custom lexicon + tuned thresholds</td>
                     </tr>
                 </table>
                 <div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'>
                     <strong>Enhanced VADER Features:</strong>
                     <ul>
-                        <li>Sentence Dominance: Any sentence ≤ -0.25 → Negative, ≥ 0.45 → Positive</li>
-                        <li>Domain Lexicon: Custom words for car, finance, and Twitter domains</li>
-                        <li>Weighted Average: Sentences weighted by length and emphasis</li>
+                        <li>Custom Lexicon: Domain-specific words for car, finance, sarcasm</li>
                         <li>Tuned Thresholds: Positive ≥ 0.30, Negative ≤ -0.05</li>
+                        <li>Strong Dominance Rules Applied</li>
                     </ul>
                 </div>
             </div>
             """
             st.markdown(html, unsafe_allow_html=True)
+            
+            # Visualizations for single text
+            st.markdown("<h3 style='color:#1e293b;'>📊 Model Comparison Visualization</h3>", unsafe_allow_html=True)
+            
+            models = ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)']
+            scores = [tb_score, vb_score, ve_score]
+            colors = ['#EF476F', '#118AB2', '#06D6A0']
+            
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.bar(models, scores, color=colors)
+            ax.set_ylim(-1, 1)
+            ax.set_ylabel('Compound Score')
+            ax.set_title('Sentiment Score Comparison')
+            st.pyplot(fig)
+            
+            # Pie chart for predictions
+            pred_counts = pd.Series([tb, vb, ve]).value_counts()
+            fig2, ax2 = plt.subplots(figsize=(6, 6))
+            ax2.pie(pred_counts.values, labels=pred_counts.index, colors=[self.color_palette[p.lower()] for p in pred_counts.index], autopct='%1.1f%%', startangle=90)
+            ax2.set_title('Prediction Distribution')
+            st.pyplot(fig2)
         else:
             st.error("Please enter some text.")
 
