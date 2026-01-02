@@ -6,14 +6,14 @@ from io import StringIO
 import matplotlib.pyplot as plt
 import seaborn as sns
 from textblob import TextBlob
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer  # Standalone VADER
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from nltk.tokenize import sent_tokenize, word_tokenize
 import re
 
 class EnhancedSentimentAnalyzer:
     def __init__(self):
-        self.sia_base = SentimentIntensityAnalyzer()  # Standalone VADER for base
-        self.sia_enh = SentimentIntensityAnalyzer()   # Same for enhanced
+        self.sia_base = SentimentIntensityAnalyzer()
+        self.sia_enh = SentimentIntensityAnalyzer()
         enhanced_lexicon = {
             "fuel-efficient": 2.5, "overpriced": -3.0, "market crashed": -3.5, "bull market": 2.5,
             "yeah_right": -1.5, "as_if": -1.5, "not_bad": 1.5, "not_too_good": -1.5
@@ -82,7 +82,6 @@ analyzer = EnhancedSentimentAnalyzer()
 
 st.set_page_config(page_title="Enhanced VADER Sentiment Analysis", layout="wide")
 
-# Your beautiful header
 st.markdown("""
 <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;'>
     <h1 style='margin:0;'>🚀 Enhanced VADER Sentiment Analysis Deployment</h1>
