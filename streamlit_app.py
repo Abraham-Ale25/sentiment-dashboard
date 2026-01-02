@@ -10,6 +10,21 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.tokenize import sent_tokenize, word_tokenize
 import re
 import nltk
+import os
+
+# Ensure NLTK data is available (Streamlit Cloud pre-downloads via environment)
+if not os.path.exists("/home/appuser/nltk_data"):
+    # This won't run on Cloud — data is pre-installed via requirements
+    pass
+
+# Rest of your class and code remains the same...
+class EnhancedSentimentAnalyzer:
+    # ... (keep everything exactly as before, including the lexicon update)
+    # No change needed here
+
+analyzer = EnhancedSentimentAnalyzer()
+
+# ... (keep all the st.markdown, tabs, etc. exactly as before)
 
 nltk.download('vader_lexicon', quiet=True)
 nltk.download('punkt', quiet=True)
