@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+textblob
+nltk
+matplotlib
+seaborn
+scikit-learn
