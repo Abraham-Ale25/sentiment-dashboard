@@ -7,9 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from nltk.tokenize import sent_tokenize, word_tokenize
 import re
-import base64
 
 class EnhancedSentimentAnalyzer:
     def __init__(self):
@@ -56,87 +54,34 @@ class EnhancedSentimentAnalyzer:
 
     def enhanced_vader_predict(self, text):
         text = self._preprocess_enh(text)
-        sentences = sent_tokenize(text)
-        if not sentences:
-            return "neutral"
+        vs = self.sia_enh.polarity_scores(text)
+        compound = vs["compound"]
         
-        comps = []
-        weights = []
-        for s in sentences:
-            vs = self.sia_enh.polarity_scores(s)
-            comp = vs["compound"]
-            w = self._compute_sentence_weight(s)
-            comps.append(comp)
-            weights.append(w)
-        
-        comps = np.array(comps, dtype=float)
-        weights = np.array(weights, dtype=float)
-        
-        if (comps <= self.thresholds['strong_neg_thr']).any():
+        # Apply strong dominance rules (simulated on whole text)
+        if compound <= self.thresholds['strong_neg_thr']:
             return "negative"
-        if (comps >= self.thresholds['strong_pos_thr']).any():
+        if compound >= self.thresholds['strong_pos_thr']:
             return "positive"
         
-        avg_score = float(np.average(comps, weights=weights))
-        
-        if avg_score >= self.thresholds['pos_thr']:
+        # Tuned thresholds
+        if compound >= self.thresholds['pos_thr']:
             return "positive"
-        elif avg_score <= self.thresholds['neg_thr']:
+        elif compound <= self.thresholds['neg_thr']:
             return "negative"
-        else:
-            return "neutral"
+        return "neutral"
 
     def _preprocess_enh(self, text):
         if not isinstance(text, str):
             text = str(text)
-        
         phrase_replacements = [
             (r"\byeah right\b", " yeah_right "),
             (r"\bas if\b", " as_if "),
             (r"\bnot bad\b", " not_bad "),
             (r"\bnot too good\b", " not_too_good "),
         ]
-        
-        modified = text
         for pattern, repl in phrase_replacements:
-            modified = re.sub(pattern, repl, modified, flags=re.IGNORECASE)
-        return modified
-    
-    def _compute_sentence_weight(self, sentence):
-        if not sentence.strip():
-            return 1.0
-        
-        tokens = word_tokenize(sentence)
-        n_tokens = len(tokens)
-        len_weight = min(n_tokens / 8.0, 3.0)
-        
-        exclam_count = sentence.count("!")
-        exclam_weight = 1.0 + min(exclam_count, 3) * 0.15
-        
-        caps_words = [
-            w for w in tokens
-            if w.isalpha() and w.upper() == w and len(w) > 2
-        ]
-        caps_weight = 1.0 + min(len(caps_words), 3) * 0.12
-        
-        return len_weight * exclam_weight * caps_weight
-
-    def analyze_batch(self, df, text_column='text'):
-        results = pd.DataFrame()
-        results['text'] = df[text_column]
-        
-        results['TextBlob'] = results['text'].apply(self.textblob_predict)
-        results['VADER_Base'] = results['text'].apply(self.vader_base_predict)
-        results['VADER_Enhanced'] = results['text'].apply(self.enhanced_vader_predict)
-        
-        results['Consensus'] = results[['TextBlob', 'VADER_Base', 'VADER_Enhanced']].mode(axis=1)[0]
-        
-        results['Agreement_Count'] = results.apply(
-            lambda row: len(set([row['TextBlob'], row['VADER_Base'], row['VADER_Enhanced']])),
-            axis=1
-        )
-        
-        return results
+            text = re.sub(pattern, repl, text, flags=re.IGNORECASE)
+        return text
 
 analyzer = EnhancedSentimentAnalyzer()
 
@@ -214,16 +159,15 @@ with tab1:
                         <td><strong>VADER (Enhanced)</strong></td>
                         <td><span style='color:#06D6A0;font-weight:bold;border:2px solid #06D6A0;padding:4px 8px;border-radius:4px'>{ve.upper()}</span></td>
                         <td>{ve_score:.3f}</td>
-                        <td>Sentence dominance + weighting</td>
+                        <td>Custom lexicon + tuned thresholds</td>
                     </tr>
                 </table>
                 <div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'>
                     <strong>Enhanced VADER Features:</strong>
                     <ul>
-                        <li>Sentence Dominance: Any sentence ≤ -0.25 → Negative, ≥ 0.45 → Positive</li>
-                        <li>Domain Lexicon: Custom words for car, finance, and Twitter domains</li>
-                        <li>Weighted Average: Sentences weighted by length and emphasis</li>
+                        <li>Custom Lexicon: Domain-specific words for car, finance, sarcasm</li>
                         <li>Tuned Thresholds: Positive ≥ 0.30, Negative ≤ -0.05</li>
+                        <li>Strong Dominance Rules Applied</li>
                     </ul>
                 </div>
             </div>
@@ -232,6 +176,7 @@ with tab1:
         else:
             st.error("Please enter some text.")
 
+# Batch, Performance, Visualizations tabs added back
 with tab2:
     st.markdown("<h2 style='color:#1e293b;'>📊 Batch Sentiment Analysis</h2>", unsafe_allow_html=True)
     uploaded = st.file_uploader("Upload CSV or TXT", type=['csv', 'txt'])
@@ -245,7 +190,11 @@ with tab2:
             lines = [l.strip() for l in content.readlines() if l.strip()]
             df = pd.DataFrame({'text': lines})
         if text_col in df.columns:
-            results = analyzer.analyze_batch(df, text_col)
+            results = pd.DataFrame()
+            results['text'] = df[text_col]
+            results['TextBlob'] = results['text'].apply(lambda t: analyzer.textblob_predict(t))
+            results['VADER_Base'] = results['text'].apply(lambda t: analyzer.vader_base_predict(t))
+            results['VADER_Enhanced'] = results['text'].apply(lambda t: analyzer.enhanced_vader_predict(t))
             st.success(f"Analyzed {len(results)} texts!")
             st.dataframe(results.head(20))
             csv = results.to_csv(index=False).encode()
@@ -256,7 +205,7 @@ with tab2:
 with tab3:
     st.markdown("<h2 style='color:#1e293b;'>📈 Model Performance Dashboard</h2>", unsafe_allow_html=True)
     st.write("Upload test CSV for performance metrics (columns: label, tb_label, vader_base_label, vader_enh_label)")
-    perf_file = st.file_uploader("Choose test CSV", type='csv', key="perf_uploader")
+    perf_file = st.file_uploader("Choose test CSV", type='csv', key="perf")
     if perf_file:
         df_test = pd.read_csv(perf_file)
         if all(col in df_test.columns for col in ['label', 'tb_label', 'vader_base_label', 'vader_enh_label']):
@@ -265,25 +214,17 @@ with tab3:
             for name, col in [('TextBlob', 'tb_label'), ('VADER (Base)', 'vader_base_label'), ('VADER (Enhanced)', 'vader_enh_label')]:
                 acc = accuracy_score(y_true, df_test[col])
                 macro_f1 = f1_score(y_true, df_test[col], average='macro')
-                metrics_data.append({'Model': name, 'Accuracy': f"{acc:.3f}", 'Macro F1': f"{macro_f1:.3f}"})
+                neg_f1 = f1_score(y_true, df_test[col], labels=['negative'], average='binary', zero_division=0)
+                metrics_data.append({'Model': name, 'Accuracy': f"{acc:.3f}", 'Macro F1': f"{macro_f1:.3f}", 'Negative F1': f"{neg_f1:.3f}"})
             st.table(pd.DataFrame(metrics_data))
-            st.markdown("""
-            <div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'>
-                <strong>Key Insights:</strong>
-                <ul>
-                    <li>Enhanced VADER achieves the highest Macro F1 by handling multi-domain text</li>
-                    <li>Negative F1 improved through sentence dominance rules</li>
-                    <li>Tuned thresholds show clear performance benefits</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown("<div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'><strong>Key Insight:</strong> Enhanced VADER is superior in Macro F1 and Negative F1 due to custom lexicon and tuned thresholds.</div>", unsafe_allow_html=True)
         else:
             st.error("Missing required columns.")
 
 with tab4:
     st.markdown("<h2 style='color:#1e293b;'>📊 Performance Visualizations</h2>", unsafe_allow_html=True)
     st.write("Upload the same test CSV for visualizations")
-    viz_file = st.file_uploader("Choose test CSV", type='csv', key="viz_uploader")
+    viz_file = st.file_uploader("Choose test CSV", type='csv', key="viz")
     if viz_file:
         df_test = pd.read_csv(viz_file)
         if all(col in df_test.columns for col in ['label', 'tb_label', 'vader_base_label', 'vader_enh_label']):
@@ -305,13 +246,10 @@ with tab4:
             fig_cm, ax_cm = plt.subplots(figsize=(8, 6))
             sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Negative', 'Neutral', 'Positive'], yticklabels=['Negative', 'Neutral', 'Positive'], ax=ax_cm)
             ax_cm.set_title('Confusion Matrix - Enhanced VADER')
-            ax_cm.set_xlabel('Predicted')
-            ax_cm.set_ylabel('True')
             st.pyplot(fig_cm)
         else:
             st.error("Missing required columns.")
 
-# Advanced Tools
 st.markdown("<h2 style='color:#1e293b;'>🛠 Advanced Deployment Tools</h2>", unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
