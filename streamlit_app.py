@@ -5,6 +5,7 @@ from datetime import datetime
 from io import StringIO
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import re
@@ -102,14 +103,40 @@ class EnhancedSentimentAnalyzer:
         if not s.strip():
             return 1.0
         tokens = s.split()
-        len_w = min(len(tokens)/8.0, 3.0)
-        excl_w = 1.0 + min(s.count("!"), 3)*0.15
-        caps_w = 1.0 + min(len([w for w in tokens if w.isupper() and len(w)>2]), 3)*0.12
-        return len_w * excl_w * caps_w
+        n_tokens = len(tokens)
+        len_weight = min(n_tokens / 8.0, 3.0)
+        
+        exclam_count = s.count("!")
+        exclam_weight = 1.0 + min(exclam_count, 3) * 0.15
+        
+        caps_words = [
+            w for w in tokens
+            if w.isupper() and len(w) > 2
+        ]
+        caps_weight = 1.0 + min(len(caps_words), 3) * 0.12
+        
+        return len_weight * exclam_weight * caps_weight
 
     def _simple_sent_tokenize(self, text):
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+        sentences = re.split(r'(?<=[.!?])\s+', text)
         return [s.strip() for s in sentences if s.strip()]
+
+    def analyze_batch(self, df, text_column='text'):
+        results = pd.DataFrame()
+        results['text'] = df[text_column]
+        
+        results['TextBlob'] = results['text'].apply(self.textblob_predict)
+        results['VADER_Base'] = results['text'].apply(self.vader_base_predict)
+        results['VADER_Enhanced'] = results['text'].apply(self.enhanced_vader_predict)
+        
+        results['Consensus'] = results[['TextBlob', 'VADER_Base', 'VADER_Enhanced']].mode(axis=1)[0]
+        
+        results['Agreement_Count'] = results.apply(
+            lambda row: len(set([row['TextBlob'], row['VADER_Base', 'VADER_Enhanced']])),
+            axis=1
+        )
+        
+        return results
 
 analyzer = EnhancedSentimentAnalyzer()
 
@@ -125,15 +152,15 @@ st.markdown("""
             <li>✅ Uses actual pipeline configurations</li>
             <li>✅ Batch CSV file processing</li>
             <li>✅ Single text analysis</li>
-            <li>✅ Visualizations for every analysis</li>
-            <li>✅ Export results to CSV</li>
+            <li>✅ Performance visualization</li>
+            <li>✅ Export results to HTML/CSV</li>
             <li>✅ API code generation</li>
         </ul>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-tab1 = st.tabs(["🔍 Single Analysis"])[0]
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Single Analysis", "📊 Batch Analysis", "📈 Performance", "📊 Visualizations"])
 
 with tab1:
     st.markdown("<h2 style='color:#1e293b;'>🔍 Live Sentiment Analysis</h2>", unsafe_allow_html=True)
@@ -161,7 +188,6 @@ with tab1:
             vb_score = analyzer.sia_base.polarity_scores(text)['compound']
             ve_score = analyzer.sia_enh.polarity_scores(text)['compound']
             
-            # Results table
             html = f"""
             <div style='background:#f8fafc; padding:20px; border-radius:10px; margin-top:20px;'>
                 <h3 style='color:#1e293b;'>📊 Analysis Results</h3>
@@ -188,15 +214,16 @@ with tab1:
                         <td><strong>VADER (Enhanced)</strong></td>
                         <td><span style='color:#06D6A0;font-weight:bold;border:2px solid #06D6A0;padding:4px 8px;border-radius:4px'>{ve.upper()}</span></td>
                         <td>{ve_score:.3f}</td>
-                        <td>Custom lexicon + tuned thresholds</td>
+                        <td>Sentence dominance + weighting</td>
                     </tr>
                 </table>
                 <div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'>
                     <strong>Enhanced VADER Features:</strong>
                     <ul>
-                        <li>Custom Lexicon: Domain-specific words for car, finance, sarcasm</li>
+                        <li>Sentence Dominance: Any sentence ≤ -0.25 → Negative, ≥ 0.45 → Positive</li>
+                        <li>Domain Lexicon: Custom words for car, finance, and Twitter domains</li>
+                        <li>Weighted Average: Sentences weighted by length and emphasis</li>
                         <li>Tuned Thresholds: Positive ≥ 0.30, Negative ≤ -0.05</li>
-                        <li>Strong Dominance Rules Applied</li>
                     </ul>
                 </div>
             </div>
@@ -208,7 +235,7 @@ with tab1:
             
             models = ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)']
             scores = [tb_score, vb_score, ve_score]
-            colors = ['#EF476F', '#118AB2', '#06D6A0']
+            colors = [self.color_palette[m] for m in models]
             
             fig, ax = plt.subplots(figsize=(8, 5))
             ax.bar(models, scores, color=colors)
