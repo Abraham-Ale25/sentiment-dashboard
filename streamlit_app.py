@@ -11,24 +11,18 @@ from nltk.tokenize import sent_tokenize, word_tokenize
 import re
 import nltk
 import os
-
 # Ensure NLTK data is available (Streamlit Cloud pre-downloads via environment)
 if not os.path.exists("/home/appuser/nltk_data"):
     # This won't run on Cloud — data is pre-installed via requirements
     pass
-
 # Rest of your class and code remains the same...
 class EnhancedSentimentAnalyzer:
     # ... (keep everything exactly as before, including the lexicon update)
     # No change needed here
-
 analyzer = EnhancedSentimentAnalyzer()
-
 # ... (keep all the st.markdown, tabs, etc. exactly as before)
-
 nltk.download('vader_lexicon', quiet=True)
 nltk.download('punkt', quiet=True)
-
 class EnhancedSentimentAnalyzer:
     def __init__(self):
         self.sia_base = SentimentIntensityAnalyzer()
@@ -41,14 +35,11 @@ class EnhancedSentimentAnalyzer:
         self.thresholds = {'pos_thr': 0.30, 'neg_thr': -0.05, 'strong_neg_thr': -0.25, 'strong_pos_thr': 0.45}
         self.color_palette = {"TextBlob": "#EF476F", "VADER (Base)": "#118AB2", "VADER (Enhanced)": "#06D6A0",
                               "negative": "#EF476F", "neutral": "#FFD166", "positive": "#06D6A0"}
-
     def predict(self, text):
         tb_pol = TextBlob(text).sentiment.polarity
         tb = "positive" if tb_pol >= 0.05 else "negative" if tb_pol <= -0.05 else "neutral"
-        
         vb_comp = self.sia_base.polarity_scores(text)['compound']
         vb = "positive" if vb_comp >= 0.05 else "negative" if vb_comp <= -0.05 else "neutral"
-        
         sentences = sent_tokenize(text)
         comps = []
         weights = []
@@ -61,7 +52,6 @@ class EnhancedSentimentAnalyzer:
             caps_w = 1.0 + min(len([w for w in tokens if w.isalpha() and w.upper()==w and len(w)>2]), 3)*0.12
             weights.append(len_w * excl_w * caps_w)
             comps.append(comp)
-        
         if comps:
             comps = np.array(comps)
             weights = np.array(weights)
@@ -76,13 +66,9 @@ class EnhancedSentimentAnalyzer:
         else:
             ve = "neutral"
             ve_score = 0.0
-        
         return tb, vb, ve, tb_pol, vb_comp, ve_score
-
 analyzer = EnhancedSentimentAnalyzer()
-
 st.set_page_config(page_title="Enhanced VADER Sentiment Analysis", layout="wide")
-
 st.markdown("""
 <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;'>
     <h1 style='margin:0;'>🚀 Enhanced VADER Sentiment Analysis Deployment</h1>
@@ -100,13 +86,10 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
-
 tab1, tab2, tab3, tab4 = st.tabs(["🔍 Single Analysis", "📊 Batch Analysis", "📈 Performance", "📊 Visualizations"])
-
 with tab1:
     st.markdown("<h2 style='color:#1e293b;'>🔍 Live Sentiment Analysis</h2>", unsafe_allow_html=True)
     st.write("Enter text below to analyze sentiment with all three models:")
-    
     examples = [
         ("Select example...", ""),
         ("Car review: Excellent fuel economy but uncomfortable seats", "The car has excellent fuel economy which saves me money. However, the seats are very uncomfortable on long drives."),
@@ -115,11 +98,9 @@ with tab1:
         ("Mixed sentiment: Terrible service but good food", "The service at this restaurant was terrible - we waited 45 minutes. However, the food was surprisingly good."),
         ("Negative review: Complete waste of money", "This product is a complete waste of money. It broke after 2 days and customer service was unhelpful.")
     ]
-    
     selected = st.selectbox("Load Example:", [e[0] for e in examples], key="example_dropdown")
     selected_text = next((e[1] for e in examples if e[0] == selected), "")
     text = st.text_area("Input Text:", value=selected_text, height=150, placeholder="Enter text for sentiment analysis...", key="input_text")
-    
     if st.button("Analyze Sentiment", type="primary", key="analyze_btn"):
         if text.strip():
             tb, vb, ve, tb_score, vb_score, ve_score = analyzer.predict(text)
@@ -166,9 +147,7 @@ with tab1:
             st.markdown(html, unsafe_allow_html=True)
         else:
             st.error("Please enter some text.")
-
 # Add batch, performance, visualizations tabs similarly if needed
-
 st.markdown("<h2 style='color:#1e293b;'>🛠 Advanced Deployment Tools</h2>", unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
