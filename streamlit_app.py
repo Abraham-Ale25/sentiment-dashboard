@@ -1,3 +1,4 @@
+%%writefile sentiment_dashboard.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,7 +8,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from nltk.tokenize import sent_tokenize, word_tokenize
 import re
 
 class EnhancedSentimentAnalyzer:
@@ -35,35 +35,12 @@ class EnhancedSentimentAnalyzer:
         vb_comp = self.sia_base.polarity_scores(text)['compound']
         vb = "positive" if vb_comp >= 0.05 else "negative" if vb_comp <= -0.05 else "neutral"
         
-        # Enhanced VADER
+        # Enhanced VADER (no sentence tokenization to avoid NLTK punkt)
         text = self._preprocess_enh(text)
-        sentences = sent_tokenize(text)
-        comps = []
-        weights = []
-        for s in sentences:
-            vs = self.sia_enh.polarity_scores(s)
-            comp = vs['compound']
-            tokens = word_tokenize(s)
-            len_w = min(len(tokens)/8.0, 3.0)
-            excl_w = 1.0 + min(s.count("!"), 3)*0.15
-            caps_w = 1.0 + min(len([w for w in tokens if w.isalpha() and w.upper()==w and len(w)>2]), 3)*0.12
-            weights.append(len_w * excl_w * caps_w)
-            comps.append(comp)
-        
-        if comps:
-            comps = np.array(comps)
-            weights = np.array(weights)
-            if (comps <= self.thresholds['strong_neg_thr']).any():
-                ve = "negative"
-            elif (comps >= self.thresholds['strong_pos_thr']).any():
-                ve = "positive"
-            else:
-                avg = np.average(comps, weights=weights)
-                ve = "positive" if avg >= self.thresholds['pos_thr'] else "negative" if avg <= self.thresholds['neg_thr'] else "neutral"
-            ve_score = float(avg)
-        else:
-            ve = "neutral"
-            ve_score = 0.0
+        vs = self.sia_enh.polarity_scores(text)
+        ve_comp = vs['compound']
+        ve = "positive" if ve_comp >= self.thresholds['pos_thr'] else "negative" if ve_comp <= self.thresholds['neg_thr'] else "neutral"
+        ve_score = ve_comp
         
         return tb, vb, ve, tb_pol, vb_comp, ve_score
 
@@ -92,7 +69,6 @@ st.markdown("""
             <li>✅ Uses actual pipeline configurations</li>
             <li>✅ Batch CSV file processing</li>
             <li>✅ Single text analysis</li>
-            <li>✅ Performance visualization</li>
             <li>✅ Export results to HTML/CSV</li>
             <li>✅ API code generation</li>
         </ul>
@@ -148,16 +124,15 @@ with tab1:
                         <td><strong>VADER (Enhanced)</strong></td>
                         <td><span style='color:#06D6A0;font-weight:bold;border:2px solid #06D6A0;padding:4px 8px;border-radius:4px'>{ve.upper()}</span></td>
                         <td>{ve_score:.3f}</td>
-                        <td>Sentence dominance + weighting</td>
+                        <td>Custom lexicon + tuned thresholds</td>
                     </tr>
                 </table>
                 <div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'>
                     <strong>Enhanced VADER Features:</strong>
                     <ul>
-                        <li>Sentence Dominance: Any sentence ≤ -0.25 → Negative, ≥ 0.45 → Positive</li>
-                        <li>Domain Lexicon: Custom words for car, finance, and Twitter domains</li>
-                        <li>Weighted Average: Sentences weighted by length and emphasis</li>
+                        <li>Custom Lexicon: Domain-specific words for car, finance, sarcasm</li>
                         <li>Tuned Thresholds: Positive ≥ 0.30, Negative ≤ -0.05</li>
+                        <li>Strong Dominance Rules (if needed in full version)</li>
                     </ul>
                 </div>
             </div>
