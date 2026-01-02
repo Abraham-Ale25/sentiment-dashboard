@@ -107,7 +107,7 @@ class EnhancedSentimentAnalyzer:
         len_weight = min(n_tokens / 8.0, 3.0)
         
         exclam_count = s.count("!")
-        exclam_weight = 1.0 + min(exclam_count, 3) * 0.15
+        excl_weight = 1.0 + min(exclam_count, 3) * 0.15
         
         caps_words = [
             w for w in tokens
@@ -115,28 +115,11 @@ class EnhancedSentimentAnalyzer:
         ]
         caps_weight = 1.0 + min(len(caps_words), 3) * 0.12
         
-        return len_weight * exclam_weight * caps_weight
+        return len_weight * excl_weight * caps_weight
 
     def _simple_sent_tokenize(self, text):
         sentences = re.split(r'(?<=[.!?])\s+', text)
         return [s.strip() for s in sentences if s.strip()]
-
-    def analyze_batch(self, df, text_column='text'):
-        results = pd.DataFrame()
-        results['text'] = df[text_column]
-        
-        results['TextBlob'] = results['text'].apply(self.textblob_predict)
-        results['VADER_Base'] = results['text'].apply(self.vader_base_predict)
-        results['VADER_Enhanced'] = results['text'].apply(self.enhanced_vader_predict)
-        
-        results['Consensus'] = results[['TextBlob', 'VADER_Base', 'VADER_Enhanced']].mode(axis=1)[0]
-        
-        results['Agreement_Count'] = results.apply(
-            lambda row: len(set([row['TextBlob'], row['VADER_Base', 'VADER_Enhanced']])),
-            axis=1
-        )
-        
-        return results
 
 analyzer = EnhancedSentimentAnalyzer()
 
@@ -214,44 +197,71 @@ with tab1:
                         <td><strong>VADER (Enhanced)</strong></td>
                         <td><span style='color:#06D6A0;font-weight:bold;border:2px solid #06D6A0;padding:4px 8px;border-radius:4px'>{ve.upper()}</span></td>
                         <td>{ve_score:.3f}</td>
-                        <td>Sentence dominance + weighting</td>
+                        <td>Custom lexicon + tuned thresholds</td>
                     </tr>
                 </table>
                 <div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'>
                     <strong>Enhanced VADER Features:</strong>
                     <ul>
-                        <li>Sentence Dominance: Any sentence ≤ -0.25 → Negative, ≥ 0.45 → Positive</li>
-                        <li>Domain Lexicon: Custom words for car, finance, and Twitter domains</li>
-                        <li>Weighted Average: Sentences weighted by length and emphasis</li>
+                        <li>Custom Lexicon: Domain-specific words for car, finance, sarcasm</li>
                         <li>Tuned Thresholds: Positive ≥ 0.30, Negative ≤ -0.05</li>
+                        <li>Strong Dominance Rules Applied</li>
                     </ul>
                 </div>
             </div>
             """
             st.markdown(html, unsafe_allow_html=True)
-            
-            # Visualizations for single text
-            st.markdown("<h3 style='color:#1e293b;'>📊 Model Comparison Visualization</h3>", unsafe_allow_html=True)
-            
-            models = ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)']
-            scores = [tb_score, vb_score, ve_score]
-            colors = [self.color_palette[m] for m in models]
-            
-            fig, ax = plt.subplots(figsize=(8, 5))
-            ax.bar(models, scores, color=colors)
-            ax.set_ylim(-1, 1)
-            ax.set_ylabel('Compound Score')
-            ax.set_title('Sentiment Score Comparison')
-            st.pyplot(fig)
-            
-            # Pie chart for predictions
-            pred_counts = pd.Series([tb, vb, ve]).value_counts()
-            fig2, ax2 = plt.subplots(figsize=(6, 6))
-            ax2.pie(pred_counts.values, labels=pred_counts.index, colors=[self.color_palette[p.lower()] for p in pred_counts.index], autopct='%1.1f%%', startangle=90)
-            ax2.set_title('Prediction Distribution')
-            st.pyplot(fig2)
         else:
             st.error("Please enter some text.")
+
+with tab3:
+    st.markdown("<h2 style='color:#1e293b;'>📈 Model Performance</h2>", unsafe_allow_html=True)
+    st.write("Upload test CSV with columns: label, tb_label, vader_base_label, vader_enh_label")
+    perf_file = st.file_uploader("Test CSV", type='csv', key="perf")
+    if perf_file:
+        df_test = pd.read_csv(perf_file)
+        required = ['label', 'tb_label', 'vader_base_label', 'vader_enh_label']
+        if all(c in df_test.columns for c in required):
+            y_true = df_test['label']
+            metrics = []
+            for name, col in [('TextBlob', 'tb_label'), ('VADER (Base)', 'vader_base_label'), ('VADER (Enhanced)', 'vader_enh_label')]:
+                acc = accuracy_score(y_true, df_test[col])
+                macro_f1 = f1_score(y_true, df_test[col], average='macro')
+                neg_f1 = f1_score(y_true, df_test[col], labels=['negative'], average='binary', zero_division=0)
+                metrics.append({'Model': name, 'Accuracy': f"{acc:.3f}", 'Macro F1': f"{macro_f1:.3f}", 'Negative F1': f"{neg_f1:.3f}"})
+            st.table(pd.DataFrame(metrics))
+        else:
+            st.error("Missing required columns.")
+
+with tab4:
+    st.markdown("<h2 style='color:#1e293b;'>📊 Visualizations</h2>", unsafe_allow_html=True)
+    st.write("Upload test CSV to visualize performance")
+    viz_file = st.file_uploader("Test CSV", type='csv', key="viz")
+    if viz_file:
+        df_test = pd.read_csv(viz_file)
+        required = ['label', 'tb_label', 'vader_base_label', 'vader_enh_label']
+        if all(c in df_test.columns for c in required):
+            models = ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)']
+            colors = ['#EF476F', '#118AB2', '#06D6A0']
+            accs = [accuracy_score(df_test['label'], df_test[col]) for col in ['tb_label', 'vader_base_label', 'vader_enh_label']]
+            macro_f1s = [f1_score(df_test['label'], df_test[col], average='macro') for col in ['tb_label', 'vader_base_label', 'vader_enh_label']]
+            
+            fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+            ax[0].bar(models, accs, color=colors)
+            ax[0].set_title('Accuracy Comparison')
+            ax[0].set_ylim(0, 1)
+            ax[1].bar(models, macro_f1s, color=colors)
+            ax[1].set_title('Macro F1 Comparison')
+            ax[1].set_ylim(0, 1)
+            st.pyplot(fig)
+            
+            cm = confusion_matrix(df_test['label'], df_test['vader_enh_label'], labels=['negative', 'neutral', 'positive'])
+            fig_cm, ax_cm = plt.subplots(figsize=(8, 6))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Negative', 'Neutral', 'Positive'], yticklabels=['Negative', 'Neutral', 'Positive'], ax=ax_cm)
+            ax_cm.set_title('Confusion Matrix - Enhanced VADER')
+            st.pyplot(fig_cm)
+        else:
+            st.error("Missing required columns.")
 
 st.markdown("<h2 style='color:#1e293b;'>🛠 Advanced Deployment Tools</h2>", unsafe_allow_html=True)
 c1, c2 = st.columns(2)
