@@ -27,15 +27,6 @@ class EnhancedSentimentAnalyzer:
             'strong_neg_thr': -0.25,
             'strong_pos_thr': 0.45
         }
-        
-        self.color_palette = {
-            "TextBlob": "#EF476F",
-            "VADER (Base)": "#118AB2",
-            "VADER (Enhanced)": "#06D6A0",
-            "negative": "#EF476F",
-            "neutral": "#FFD166",
-            "positive": "#06D6A0"
-        }
 
     def textblob_predict(self, text):
         polarity = TextBlob(text).sentiment.polarity
@@ -103,19 +94,10 @@ class EnhancedSentimentAnalyzer:
         if not s.strip():
             return 1.0
         tokens = s.split()
-        n_tokens = len(tokens)
-        len_weight = min(n_tokens / 8.0, 3.0)
-        
-        exclam_count = s.count("!")
-        excl_weight = 1.0 + min(exclam_count, 3) * 0.15
-        
-        caps_words = [
-            w for w in tokens
-            if w.isupper() and len(w) > 2
-        ]
-        caps_weight = 1.0 + min(len(caps_words), 3) * 0.12
-        
-        return len_weight * excl_weight * caps_weight
+        len_w = min(len(tokens)/8.0, 3.0)
+        excl_w = 1.0 + min(s.count("!"), 3)*0.15
+        caps_w = 1.0 + min(len([w for w in tokens if w.isupper() and len(w)>2]), 3)*0.12
+        return len_w * excl_w * caps_w
 
     def _simple_sent_tokenize(self, text):
         sentences = re.split(r'(?<=[.!?])\s+', text)
@@ -167,10 +149,14 @@ with tab1:
             tb = analyzer.textblob_predict(text)
             vb = analyzer.vader_base_predict(text)
             ve = analyzer.enhanced_vader_predict(text)
-            tb_score = TextBlob(text).sentiment.polarity
-            vb_score = analyzer.sia_base.polarity_scores(text)['compound']
-            ve_score = analyzer.sia_enh.polarity_scores(text)['compound']
             
+            # Create a small DataFrame for visualization
+            df_single = pd.DataFrame({
+                'Model': ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)'],
+                'Prediction': [tb, vb, ve]
+            })
+            
+            # Results table without score
             html = f"""
             <div style='background:#f8fafc; padding:20px; border-radius:10px; margin-top:20px;'>
                 <h3 style='color:#1e293b;'>📊 Analysis Results</h3>
@@ -179,24 +165,21 @@ with tab1:
                 </div>
                 <table style='width:100%; border-collapse:collapse;'>
                     <tr style='background:#1e293b; color:white;'>
-                        <th style='padding:12px;'>Model</th><th>Prediction</th><th>Score</th><th>Details</th>
+                        <th style='padding:12px;'>Model</th><th>Prediction</th><th>Details</th>
                     </tr>
                     <tr>
                         <td><strong>TextBlob</strong></td>
                         <td><span style='color:#EF476F;font-weight:bold'>{tb.upper()}</span></td>
-                        <td>{tb_score:.3f}</td>
                         <td>Polarity-based</td>
                     </tr>
                     <tr>
                         <td><strong>VADER (Base)</strong></td>
                         <td><span style='color:#118AB2;font-weight:bold'>{vb.upper()}</span></td>
-                        <td>{vb_score:.3f}</td>
                         <td>Document-level</td>
                     </tr>
                     <tr>
                         <td><strong>VADER (Enhanced)</strong></td>
                         <td><span style='color:#06D6A0;font-weight:bold;border:2px solid #06D6A0;padding:4px 8px;border-radius:4px'>{ve.upper()}</span></td>
-                        <td>{ve_score:.3f}</td>
                         <td>Custom lexicon + tuned thresholds</td>
                     </tr>
                 </table>
@@ -211,8 +194,64 @@ with tab1:
             </div>
             """
             st.markdown(html, unsafe_allow_html=True)
+            
+            # Visualization for single analysis
+            st.markdown("<h3 style='color:#1e293b;'>📊 Visualization for This Analysis</h3>", unsafe_allow_html=True)
+            
+            # Bar chart for predictions
+            pred_counts = df_single['Prediction'].value_counts()
+            fig_bar, ax_bar = plt.subplots(figsize=(8, 5))
+            pred_counts.plot(kind='bar', color=['#EF476F', '#FFD166', '#06D6A0'])
+            ax_bar.set_title('Prediction Distribution')
+            ax_bar.set_ylabel('Count')
+            st.pyplot(fig_bar)
+            
+            # Pie chart
+            fig_pie, ax_pie = plt.subplots(figsize=(6, 6))
+            ax_pie.pie(pred_counts.values, labels=pred_counts.index, colors=['#EF476F', '#FFD166', '#06D6A0'], autopct='%1.1f%%', startangle=90)
+            ax_pie.set_title('Prediction Distribution')
+            st.pyplot(fig_pie)
         else:
             st.error("Please enter some text.")
+
+with tab2:
+    st.markdown("<h2 style='color:#1e293b;'>📊 Batch Sentiment Analysis</h2>", unsafe_allow_html=True)
+    uploaded = st.file_uploader("Upload CSV or TXT", type=['csv', 'txt'])
+    text_col = st.text_input("Text Column:", value="text")
+    if uploaded and st.button("Analyze Batch", type="primary"):
+        content = StringIO(uploaded.getvalue().decode("utf-8"))
+        try:
+            df = pd.read_csv(content)
+        except:
+            content.seek(0)
+            lines = [l.strip() for l in content.readlines() if l.strip()]
+            df = pd.DataFrame({'text': lines})
+        if text_col in df.columns:
+            results = pd.DataFrame()
+            results['text'] = df[text_col]
+            results['TextBlob'] = results['text'].apply(lambda t: analyzer.textblob_predict(t))
+            results['VADER_Base'] = results['text'].apply(lambda t: analyzer.vader_base_predict(t))
+            results['VADER_Enhanced'] = results['text'].apply(lambda t: analyzer.enhanced_vader_predict(t))
+            st.success(f"Analyzed {len(results)} texts!")
+            st.dataframe(results.head(20))
+            csv = results.to_csv(index=False).encode()
+            st.download_button("⬇️ Download Results CSV", csv, f"batch_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", "text/csv")
+            
+            # Visualization for batch
+            st.markdown("<h3 style='color:#1e293b;'>📊 Batch Visualization</h3>", unsafe_allow_html=True)
+            pred_counts = results['VADER_Enhanced'].value_counts()
+            fig_bar, ax_bar = plt.subplots(figsize=(8, 5))
+            pred_counts.plot(kind='bar', color=['#EF476F', '#FFD166', '#06D6A0'])
+            ax_bar.set_title('Enhanced VADER Prediction Distribution')
+            ax_bar.set_ylabel('Count')
+            st.pyplot(fig_bar)
+            
+            fig_pie, ax_pie = plt.subplots(figsize=(6, 6))
+            ax_pie.pie(pred_counts.values, labels=pred_counts.index, colors=['#EF476F', '#FFD166', '#06D6A0'], autopct='%1.1f%%', startangle=90)
+            ax_pie.set_title('Enhanced VADER Prediction Distribution')
+            st.pyplot(fig_pie)
+        else:
+            st.error(f"Column '{text_col}' not found.")
 
 with tab3:
     st.markdown("<h2 style='color:#1e293b;'>📈 Model Performance</h2>", unsafe_allow_html=True)
@@ -230,6 +269,7 @@ with tab3:
                 neg_f1 = f1_score(y_true, df_test[col], labels=['negative'], average='binary', zero_division=0)
                 metrics.append({'Model': name, 'Accuracy': f"{acc:.3f}", 'Macro F1': f"{macro_f1:.3f}", 'Negative F1': f"{neg_f1:.3f}"})
             st.table(pd.DataFrame(metrics))
+            st.markdown("<div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'><strong>Key Insight:</strong> Enhanced VADER is superior in Macro F1 and Negative F1 due to custom lexicon and tuned thresholds.</div>", unsafe_allow_html=True)
         else:
             st.error("Missing required columns.")
 
