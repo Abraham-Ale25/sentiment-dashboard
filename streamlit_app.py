@@ -5,7 +5,6 @@ from datetime import datetime
 from io import StringIO
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import re
@@ -21,9 +20,21 @@ class EnhancedSentimentAnalyzer:
         }
         self.sia_enh.lexicon.update(enhanced_lexicon)
         
-        self.thresholds = {'pos_thr': 0.30, 'neg_thr': -0.05, 'strong_neg_thr': -0.25, 'strong_pos_thr': 0.45}
-        self.color_palette = {"TextBlob": "#EF476F", "VADER (Base)": "#118AB2", "VADER (Enhanced)": "#06D6A0",
-                              "negative": "#EF476F", "neutral": "#FFD166", "positive": "#06D6A0"}
+        self.thresholds = {
+            'pos_thr': 0.30,
+            'neg_thr': -0.05,
+            'strong_neg_thr': -0.25,
+            'strong_pos_thr': 0.45
+        }
+        
+        self.color_palette = {
+            "TextBlob": "#EF476F",
+            "VADER (Base)": "#118AB2",
+            "VADER (Enhanced)": "#06D6A0",
+            "negative": "#EF476F",
+            "neutral": "#FFD166",
+            "positive": "#06D6A0"
+        }
 
     def textblob_predict(self, text):
         polarity = TextBlob(text).sentiment.polarity
@@ -43,7 +54,7 @@ class EnhancedSentimentAnalyzer:
 
     def enhanced_vader_predict(self, text):
         text = self._preprocess_enh(text)
-        sentences = self._sent_tokenize(text)  # Use custom sentence splitter
+        sentences = self._simple_sent_tokenize(text)
         if not sentences:
             return "neutral"
         
@@ -77,57 +88,29 @@ class EnhancedSentimentAnalyzer:
         if not isinstance(text, str):
             text = str(text)
         
-        phrase_replacements = [
+        replacements = [
             (r"\byeah right\b", " yeah_right "),
             (r"\bas if\b", " as_if "),
             (r"\bnot bad\b", " not_bad "),
             (r"\bnot too good\b", " not_too_good "),
         ]
-        
-        modified = text
-        for pattern, repl in phrase_replacements:
-            modified = re.sub(pattern, repl, modified, flags=re.IGNORECASE)
-        return modified
-    
-    def _compute_sentence_weight(self, sentence):
-        if not sentence.strip():
+        for p, r in replacements:
+            text = re.sub(p, r, text, flags=re.IGNORECASE)
+        return text
+
+    def _compute_sentence_weight(self, s):
+        if not s.strip():
             return 1.0
-        
-        # Simple token count without word_tokenize (to avoid NLTK)
-        tokens = sentence.split()  # Basic split for approximation
-        n_tokens = len(tokens)
-        len_weight = min(n_tokens / 8.0, 3.0)
-        
-        exclam_count = sentence.count("!")
-        exclam_weight = 1.0 + min(exclam_count, 3) * 0.15
-        
-        # Simple CAPS count
-        caps_words = len([w for w in tokens if w.isupper() and len(w) > 2])
-        caps_weight = 1.0 + min(caps_words, 3) * 0.12
-        
-        return len_weight * exclam_weight * caps_weight
+        tokens = s.split()
+        len_w = min(len(tokens)/8.0, 3.0)
+        excl_w = 1.0 + min(s.count("!"), 3)*0.15
+        caps_w = 1.0 + min(len([w for w in tokens if w.isupper() and len(w)>2]), 3)*0.12
+        return len_w * excl_w * caps_w
 
-    def _sent_tokenize(self, text):
-        # Simple sentence splitter using re (no NLTK)
-        sentences = re.split(r'(?<!\w\.\w.)(?<!Mrs?)(?<!Dr.)(?<!Prof.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s', text)
+    def _simple_sent_tokenize(self, text):
+        # Simple, reliable sentence splitter without complex regex
+        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
         return [s.strip() for s in sentences if s.strip()]
-
-    def analyze_batch(self, df, text_column='text'):
-        results = pd.DataFrame()
-        results['text'] = df[text_column]
-        
-        results['TextBlob'] = results['text'].apply(self.textblob_predict)
-        results['VADER_Base'] = results['text'].apply(self.vader_base_predict)
-        results['VADER_Enhanced'] = results['text'].apply(self.enhanced_vader_predict)
-        
-        results['Consensus'] = results[['TextBlob', 'VADER_Base', 'VADER_Enhanced']].mode(axis=1)[0]
-        
-        results['Agreement_Count'] = results.apply(
-            lambda row: len(set([row['TextBlob'], row['VADER_Base'], row['VADER_Enhanced']])),
-            axis=1
-        )
-        
-        return results
 
 analyzer = EnhancedSentimentAnalyzer()
 
@@ -205,15 +188,16 @@ with tab1:
                         <td><strong>VADER (Enhanced)</strong></td>
                         <td><span style='color:#06D6A0;font-weight:bold;border:2px solid #06D6A0;padding:4px 8px;border-radius:4px'>{ve.upper()}</span></td>
                         <td>{ve_score:.3f}</td>
-                        <td>Custom lexicon + tuned thresholds</td>
+                        <td>Sentence dominance + weighting</td>
                     </tr>
                 </table>
                 <div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'>
                     <strong>Enhanced VADER Features:</strong>
                     <ul>
-                        <li>Custom Lexicon: Domain-specific words for car, finance, sarcasm</li>
+                        <li>Sentence Dominance: Any sentence ≤ -0.25 → Negative, ≥ 0.45 → Positive</li>
+                        <li>Domain Lexicon: Custom words for car, finance, and Twitter domains</li>
+                        <li>Weighted Average: Sentences weighted by length and emphasis</li>
                         <li>Tuned Thresholds: Positive ≥ 0.30, Negative ≤ -0.05</li>
-                        <li>Strong Dominance Rules Applied</li>
                     </ul>
                 </div>
             </div>
@@ -222,7 +206,6 @@ with tab1:
         else:
             st.error("Please enter some text.")
 
-# Advanced Tools
 st.markdown("<h2 style='color:#1e293b;'>🛠 Advanced Deployment Tools</h2>", unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
