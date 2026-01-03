@@ -1,4 +1,4 @@
-# streamlit_app.py - COMPLETE FIXED VERSION
+# streamlit_app.py - COMPLETE UPDATED VERSION WITH PERFORMANCE METRICS
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 # ==========================
-# CUSTOM CSS FOR STUNNING UI - FIXED VERSION
+# CUSTOM CSS FOR STUNNING UI - ENHANCED COLORED BACKGROUNDS
 # ==========================
 st.markdown("""
 <style>
@@ -36,15 +36,16 @@ st.markdown("""
     
     /* Fix main container to avoid overlap */
     .main-container {
-        background: rgba(255, 255, 255, 0.95);
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 247, 250, 0.95) 100%);
         border-radius: 20px;
         padding: 30px;
         margin: 20px auto;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
         backdrop-filter: blur(10px);
         position: relative;
         z-index: 1;
         max-width: 95%;
+        border: 1px solid rgba(255,255,255,0.3);
     }
     
     /* Enhanced headers */
@@ -82,9 +83,9 @@ st.markdown("""
         z-index: 2;
     }
     
-    /* Enhanced metric cards */
+    /* Enhanced metric cards - COLORED BACKGROUNDS */
     .metric-card {
-        background: white;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
         border-radius: 15px;
         padding: 25px;
         margin: 10px;
@@ -123,14 +124,14 @@ st.markdown("""
         100% { box-shadow: 0 0 0 0 rgba(6, 214, 160, 0); }
     }
     
-    /* Tab styling */
+    /* Tab styling - COLORED BACKGROUNDS */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background: transparent;
     }
     
     .stTabs [data-baseweb="tab"] {
-        background: white;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
         border-radius: 10px 10px 0 0;
         padding: 15px 25px;
         font-weight: 600;
@@ -174,12 +175,13 @@ st.markdown("""
         background: linear-gradient(90deg, #667eea, #764ba2);
     }
     
-    /* Text area */
+    /* Text area - COLORED BACKGROUND */
     .stTextArea textarea {
         border-radius: 10px !important;
         border: 2px solid #e0e0e0 !important;
         padding: 15px !important;
         font-size: 1rem !important;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
     }
     
     .stTextArea textarea:focus {
@@ -187,15 +189,17 @@ st.markdown("""
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
     }
     
-    /* Select box */
+    /* Select box - COLORED BACKGROUND */
     .stSelectbox div[data-baseweb="select"] {
         border-radius: 10px !important;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
     }
     
-    /* Dataframe styling */
+    /* Dataframe styling - COLORED BACKGROUND */
     .stDataFrame {
         border-radius: 10px !important;
         overflow: hidden !important;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
     }
     
     /* Hide Streamlit branding */
@@ -211,7 +215,7 @@ st.markdown("""
         margin: 30px 0;
     }
     
-    /* Enhanced VADER analysis cards - FIXED WITH INLINE STYLES */
+    /* Enhanced VADER analysis cards - COLORED BACKGROUNDS */
     .explanation-box {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
@@ -253,10 +257,17 @@ st.markdown("""
     
     .sentence-card.negative {
         border-left-color: #EF476F !important;
+        background: linear-gradient(135deg, #fef0f3 0%, #f9d6dd 100%) !important;
     }
     
     .sentence-card.neutral {
         border-left-color: #FFD166 !important;
+        background: linear-gradient(135deg, #fff9e6 0%, #ffeaa7 100%) !important;
+    }
+    
+    .sentence-card.positive {
+        border-left-color: #06D6A0 !important;
+        background: linear-gradient(135deg, #f0f9f5 0%, #d4f2e8 100%) !important;
     }
     
     /* Score indicator */
@@ -292,20 +303,42 @@ st.markdown("""
         z-index: 1 !important;
     }
     
-    .badge-green { background: #06D6A0 !important; color: white !important; }
-    .badge-blue { background: #118AB2 !important; color: white !important; }
-    .badge-red { background: #EF476F !important; color: white !important; }
-    .badge-yellow { background: #FFD166 !important; color: #333 !important; }
-    .badge-purple { background: #764ba2 !important; color: white !important; }
+    .badge-green { 
+        background: linear-gradient(135deg, #06D6A0 0%, #04b586 100%) !important; 
+        color: white !important; 
+        border: 1px solid #04b586 !important;
+    }
+    .badge-blue { 
+        background: linear-gradient(135deg, #118AB2 0%, #0a6d8e 100%) !important; 
+        color: white !important; 
+        border: 1px solid #0a6d8e !important;
+    }
+    .badge-red { 
+        background: linear-gradient(135deg, #EF476F 0%, #e6305a 100%) !important; 
+        color: white !important; 
+        border: 1px solid #e6305a !important;
+    }
+    .badge-yellow { 
+        background: linear-gradient(135deg, #FFD166 0%, #f9c74f 100%) !important; 
+        color: #333 !important; 
+        border: 1px solid #f9c74f !important;
+    }
+    .badge-purple { 
+        background: linear-gradient(135deg, #764ba2 0%, #5d3a7e 100%) !important; 
+        color: white !important; 
+        border: 1px solid #5d3a7e !important;
+    }
     
     /* Fix Streamlit defaults */
     .css-18e3th9 {
         padding-top: 0 !important;
         padding-bottom: 0 !important;
+        background: transparent !important;
     }
     
     .css-1vq4p4l {
         padding-top: 0 !important;
+        background: transparent !important;
     }
     
     /* Ensure our styles override Streamlit */
@@ -332,11 +365,67 @@ st.markdown("""
     .decision-box li {
         color: white !important;
     }
+    
+    /* Expander styling - COLORED BACKGROUND */
+    .streamlit-expanderHeader {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        border: none !important;
+    }
+    
+    .streamlit-expanderContent {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 247, 250, 0.95) 100%) !important;
+        border-radius: 0 0 10px 10px !important;
+        padding: 20px !important;
+        border: 1px solid rgba(102, 126, 234, 0.2) !important;
+        border-top: none !important;
+    }
+    
+    /* Chart containers - COLORED BACKGROUND */
+    .js-plotly-plot {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 247, 250, 0.95) 100%) !important;
+        border-radius: 10px !important;
+        padding: 15px !important;
+        border: 1px solid rgba(0,0,0,0.1) !important;
+    }
+    
+    /* Quick stats box - COLORED BACKGROUND */
+    .quick-stats-box {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+        color: white !important;
+        border-radius: 10px !important;
+        padding: 20px !important;
+        margin: 10px 0 !important;
+        border: 2px solid rgba(255,255,255,0.2) !important;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+    }
+    
+    /* File uploader - COLORED BACKGROUND */
+    .stFileUploader {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 247, 250, 0.95) 100%) !important;
+        border-radius: 10px !important;
+        padding: 15px !important;
+        border: 2px dashed #667eea !important;
+    }
+    
+    /* Data table styling - COLORED BACKGROUND */
+    .dataframe {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
+        border-radius: 10px !important;
+        overflow: hidden !important;
+    }
+    
+    /* Sidebar styling */
+    .css-1d391kg {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================
-# ENHANCED VADER IMPLEMENTATION - FIXED VERSION
+# ENHANCED VADER IMPLEMENTATION
 # ==========================
 class EnhancedVADERPipeline:
     def __init__(self):
@@ -593,10 +682,10 @@ class EnhancedVADERPipeline:
         return result
 
 # ==========================
-# WOW HEADER SECTION - FIXED VERSION
+# WOW HEADER SECTION
 # ==========================
 def create_wow_header():
-    """Create stunning header with animations - FIXED VERSION"""
+    """Create stunning header with animations"""
     # Create a clean header without complex HTML that might conflict
     st.markdown("""
     <div style='text-align: center; margin-top: 0; padding-top: 0;'>
@@ -625,12 +714,12 @@ def create_wow_header():
         st.markdown('<div class="badge badge-red">🔬 Explainable AI</div>', unsafe_allow_html=True)
 
 # ==========================
-# REAL-TIME EXPLAINABILITY FUNCTIONS - FIXED VERSION
+# REAL-TIME EXPLAINABILITY FUNCTIONS
 # ==========================
 def generate_real_time_explanation(result, analyzer):
-    """Generate real-time explanation based on actual prediction results - FIXED VERSION"""
+    """Generate real-time explanation based on actual prediction results"""
     details = result.get("vader_enhanced_details", {})
-    final_score = result.get("vader_enhanced_score", 0)  # Use the score from result
+    final_score = result.get("vader_enhanced_score", 0)
     final_label = result.get("VADER_Enhanced", "neutral")
     dominance_rule = details.get("dominance_rule", "weighted_average")
     
@@ -797,7 +886,7 @@ def create_sentence_visualization(sentence_details, analyzer):
     return "\n".join(visualizations)
 
 # ==========================
-# SINGLE ANALYSIS TAB - COMPLETE FIXED VERSION
+# SINGLE ANALYSIS TAB - UPDATED WITH PERFORMANCE METRICS
 # ==========================
 def create_single_analysis_tab(analyzer):
     """Single text analysis tab with WOW factor"""
@@ -836,8 +925,7 @@ def create_single_analysis_tab(analyzer):
     with col2:
         st.markdown("### 🎯 Quick Stats")
         st.markdown("""
-        <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                    color: white; padding: 20px; border-radius: 10px;'>
+        <div class='quick-stats-box'>
             <p><strong>Enhanced VADER:</strong> 55.6% Accuracy</p>
             <p><strong>Base VADER:</strong> 54.0% Accuracy</p>
             <p><strong>TextBlob:</strong> 50.2% Accuracy</p>
@@ -1137,65 +1225,184 @@ def create_single_analysis_tab(analyzer):
                             - Is {final_score:.3f} ≤ {analyzer.thresholds['neg_thr']}? **{final_score <= analyzer.thresholds['neg_thr']}**
                             """)
                 
-                # Visualizations
-                st.markdown("## 📊 **Visual Comparison**")
+                # UPDATED: PERFORMANCE METRICS VISUALIZATIONS
+                st.markdown("## 📊 **Model Performance Comparison**")
                 
-                # Create interactive Plotly chart
-                fig = go.Figure()
-                
+                # Create grouped bar chart for Accuracy and Macro F1
                 models = ["TextBlob", "VADER (Base)", "Enhanced VADER"]
-                scores = [result["textblob_score"], result["vader_base_score"], result["vader_enhanced_score"]]
-                colors = ['#EF476F', '#118AB2', '#06D6A0']
-                predictions = [result["TextBlob"], result["VADER_Base"], result["VADER_Enhanced"]]
+                accuracy_scores = [0.502, 0.540, 0.556]
+                macro_f1_scores = [0.471, 0.530, 0.542]
                 
-                for model, score, color, pred in zip(models, scores, colors, predictions):
-                    fig.add_trace(go.Bar(
-                        x=[model],
-                        y=[score],
-                        name=model,
-                        marker_color=color,
-                        text=[f"{pred.upper()}<br>{score:.3f}"],
+                fig = go.Figure(data=[
+                    go.Bar(
+                        name='Accuracy',
+                        x=models,
+                        y=accuracy_scores,
+                        marker_color=['#EF476F', '#118AB2', '#06D6A0'],
+                        text=[f'{acc:.1%}' for acc in accuracy_scores],
                         textposition='auto',
-                        hovertemplate=f"<b>{model}</b><br>Score: {score:.3f}<br>Prediction: {pred}<extra></extra>"
-                    ))
+                        hovertemplate='<b>%{x}</b><br>Accuracy: %{y:.3f}<extra></extra>'
+                    ),
+                    go.Bar(
+                        name='Macro F1',
+                        x=models,
+                        y=macro_f1_scores,
+                        marker_color=['#F28F9D', '#5AB3D0', '#5AE2BB'],
+                        text=[f'{f1:.1%}' for f1 in macro_f1_scores],
+                        textposition='auto',
+                        hovertemplate='<b>%{x}</b><br>Macro F1: %{y:.3f}<extra></extra>'
+                    )
+                ])
                 
                 fig.update_layout(
-                    title="Sentiment Scores Comparison",
+                    title="Model Performance Metrics (Test Set: n=5,055)",
                     xaxis_title="Model",
-                    yaxis_title="Sentiment Score",
-                    height=400,
+                    yaxis_title="Score",
+                    yaxis_range=[0, 0.7],
+                    barmode='group',
+                    height=500,
                     plot_bgcolor='rgba(240,242,246,0.8)',
                     paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(size=12)
+                    font=dict(size=12),
+                    showlegend=True,
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                        xanchor="center",
+                        x=0.5
+                    )
                 )
                 
-                # Add threshold lines
-                fig.add_hline(y=0.05, line_dash="dash", line_color="red", opacity=0.5, 
-                             annotation_text="TextBlob/VADER Base Positive Threshold")
-                fig.add_hline(y=-0.05, line_dash="dash", line_color="blue", opacity=0.5,
-                             annotation_text="TextBlob/VADER Base Negative Threshold")
-                fig.add_hline(y=0.30, line_dash="dash", line_color="green", opacity=0.5,
-                             annotation_text="Enhanced VADER Positive Threshold")
-                fig.add_hline(y=-0.05, line_dash="dash", line_color="orange", opacity=0.5,
-                             annotation_text="Enhanced VADER Negative Threshold")
-                fig.add_hline(y=0, line_color="black", opacity=0.3)
+                # Add improvement annotation
+                fig.add_annotation(
+                    x=2, y=0.556,
+                    text="+2.9% vs Base VADER",
+                    showarrow=True,
+                    arrowhead=1,
+                    ax=0,
+                    ay=-40,
+                    font=dict(size=12, color="#06D6A0")
+                )
                 
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Pie chart for predictions
+                # Add detailed metrics table
+                st.markdown("### 📈 **Detailed Performance Metrics**")
+                
+                performance_data = {
+                    'Model': ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)'],
+                    'Accuracy': [0.502, 0.540, 0.556],
+                    'Macro F1': [0.471, 0.530, 0.542],
+                    'Negative F1': [0.349, 0.485, 0.488],
+                    'Positive F1': [0.512, 0.543, 0.561],
+                    'Improvement vs Baseline': ['-', '+7.6%', '+10.8%']
+                }
+                
+                perf_df = pd.DataFrame(performance_data)
+                
+                # Create styled dataframe with colored background
+                styled_df = perf_df.style.format({
+                    'Accuracy': '{:.3f}',
+                    'Macro F1': '{:.3f}',
+                    'Negative F1': '{:.3f}',
+                    'Positive F1': '{:.3f}'
+                }).apply(lambda x: ['background: linear-gradient(90deg, #06D6A0 0%, #04b586 100%); color: white' 
+                                   if x.name == 'VADER (Enhanced)' else '' for i in x], axis=1)
+                
+                st.dataframe(styled_df, use_container_width=True)
+                
+                # Radar chart for comprehensive comparison
+                st.markdown("### 🎯 **Comprehensive Model Comparison**")
+                
+                categories = ['Accuracy', 'Macro F1', 'Negative F1', 'Positive F1']
+                
+                fig_radar = go.Figure()
+                
+                for idx, model in enumerate(perf_df['Model']):
+                    values = perf_df.loc[idx, categories].tolist()
+                    values += values[:1]  # Close the radar
+                    
+                    fig_radar.add_trace(go.Scatterpolar(
+                        r=values,
+                        theta=categories + [categories[0]],
+                        name=model,
+                        fill='toself',
+                        line_color=analyzer.color_palette[model],
+                        opacity=0.6
+                    ))
+                
+                fig_radar.update_layout(
+                    polar=dict(
+                        radialaxis=dict(
+                            visible=True,
+                            range=[0, 0.6]
+                        )),
+                    showlegend=True,
+                    height=500,
+                    title="Performance Radar Chart",
+                    plot_bgcolor='rgba(240,242,246,0.8)'
+                )
+                
+                st.plotly_chart(fig_radar, use_container_width=True)
+                
+                # Stacked bar chart for F1 scores
+                st.markdown("### 📊 **F1 Score Breakdown**")
+                
+                fig_f1 = go.Figure(data=[
+                    go.Bar(
+                        name='Negative F1',
+                        x=models,
+                        y=[0.349, 0.485, 0.488],
+                        marker_color='#EF476F',
+                        text=[f'{val:.1%}' for val in [0.349, 0.485, 0.488]],
+                        textposition='auto'
+                    ),
+                    go.Bar(
+                        name='Positive F1',
+                        x=models,
+                        y=[0.512, 0.543, 0.561],
+                        marker_color='#06D6A0',
+                        text=[f'{val:.1%}' for val in [0.512, 0.543, 0.561]],
+                        textposition='auto'
+                    )
+                ])
+                
+                fig_f1.update_layout(
+                    title="F1 Score Breakdown by Sentiment Class",
+                    xaxis_title="Model",
+                    yaxis_title="F1 Score",
+                    yaxis_range=[0, 0.7],
+                    barmode='group',
+                    height=400,
+                    plot_bgcolor='rgba(240,242,246,0.8)'
+                )
+                
+                st.plotly_chart(fig_f1, use_container_width=True)
+                
+                # Pie chart for predictions (if you still want to show the current prediction distribution)
+                st.markdown("### 🥧 **Current Text Prediction Distribution**")
+                
+                predictions = [result["TextBlob"], result["VADER_Base"], result["VADER_Enhanced"]]
+                
                 fig_pie = go.Figure(data=[go.Pie(
                     labels=list(set(predictions)),
                     values=[predictions.count(p) for p in set(predictions)],
                     marker_colors=[analyzer.color_palette[p] for p in set(predictions)],
                     hole=.4,
                     textinfo='label+percent',
-                    hoverinfo='label+value+percent'
+                    hoverinfo='label+value+percent',
+                    pull=[0.1 if p == result["VADER_Enhanced"] else 0 for p in set(predictions)]
                 )])
                 
                 fig_pie.update_layout(
-                    title="Prediction Distribution Across Models",
+                    title="Model Predictions for Current Text",
                     height=400,
-                    showlegend=True
+                    showlegend=True,
+                    annotations=[dict(
+                        text=f'Best Model:<br>{result["VADER_Enhanced"].upper()}',
+                        x=0.5, y=0.5, font_size=16, showarrow=False
+                    )]
                 )
                 
                 st.plotly_chart(fig_pie, use_container_width=True)
@@ -1204,7 +1411,7 @@ def create_single_analysis_tab(analyzer):
             st.warning("⚠️ **Please enter some text to analyze!**")
 
 # ==========================
-# BATCH ANALYSIS TAB
+# BATCH ANALYSIS TAB - UPDATED WITH COLORED BACKGROUNDS
 # ==========================
 def create_batch_analysis_tab(analyzer):
     """Batch file analysis tab"""
@@ -1258,27 +1465,71 @@ def create_batch_analysis_tab(analyzer):
                     st.balloons()
                     st.success(f"🎉 **Analysis complete! Processed {len(df):,} texts.**")
                     
-                    # Summary statistics
+                    # Summary statistics with colored backgrounds
                     col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
                         enhanced_counts = results_df['VADER_Enhanced'].value_counts()
-                        st.metric("Enhanced VADER", f"{len(results_df)}", 
-                                 f"{enhanced_counts.get('positive', 0)} Positive")
+                        st.markdown(f"""
+                        <div class='metric-card'>
+                            <h3 style='color: #06D6A0; margin-top: 0;'>Enhanced VADER</h3>
+                            <div style='text-align: center; margin: 15px 0;'>
+                                <h1 style='color: #06D6A0; font-size: 2.5rem; margin: 0;'>{len(results_df)}</h1>
+                                <p style='color: #666; font-size: 0.9rem;'>Total Texts</p>
+                            </div>
+                            <p><strong>📈 Positive:</strong> {enhanced_counts.get('positive', 0)}</p>
+                            <p><strong>📉 Negative:</strong> {enhanced_counts.get('negative', 0)}</p>
+                            <p><strong>⚖️ Neutral:</strong> {enhanced_counts.get('neutral', 0)}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
                     with col2:
-                        st.metric("TextBlob", f"{len(results_df)}", 
-                                 f"{results_df['TextBlob'].value_counts().get('positive', 0)} Positive")
+                        textblob_counts = results_df['TextBlob'].value_counts()
+                        st.markdown(f"""
+                        <div class='metric-card'>
+                            <h3 style='color: #EF476F; margin-top: 0;'>TextBlob</h3>
+                            <div style='text-align: center; margin: 15px 0;'>
+                                <h1 style='color: #EF476F; font-size: 2.5rem; margin: 0;'>{len(results_df)}</h1>
+                                <p style='color: #666; font-size: 0.9rem;'>Total Texts</p>
+                            </div>
+                            <p><strong>📈 Positive:</strong> {textblob_counts.get('positive', 0)}</p>
+                            <p><strong>📉 Negative:</strong> {textblob_counts.get('negative', 0)}</p>
+                            <p><strong>⚖️ Neutral:</strong> {textblob_counts.get('neutral', 0)}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
                     with col3:
-                        st.metric("VADER Base", f"{len(results_df)}", 
-                                 f"{results_df['VADER_Base'].value_counts().get('positive', 0)} Positive")
+                        vader_counts = results_df['VADER_Base'].value_counts()
+                        st.markdown(f"""
+                        <div class='metric-card'>
+                            <h3 style='color: #118AB2; margin-top: 0;'>VADER Base</h3>
+                            <div style='text-align: center; margin: 15px 0;'>
+                                <h1 style='color: #118AB2; font-size: 2.5rem; margin: 0;'>{len(results_df)}</h1>
+                                <p style='color: #666; font-size: 0.9rem;'>Total Texts</p>
+                            </div>
+                            <p><strong>📈 Positive:</strong> {vader_counts.get('positive', 0)}</p>
+                            <p><strong>📉 Negative:</strong> {vader_counts.get('negative', 0)}</p>
+                            <p><strong>⚖️ Neutral:</strong> {vader_counts.get('neutral', 0)}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
                     with col4:
                         agreement = (results_df['TextBlob'] == results_df['VADER_Base']) & \
                                    (results_df['VADER_Base'] == results_df['VADER_Enhanced'])
-                        st.metric("Model Agreement", f"{agreement.sum():,}", 
-                                 f"{agreement.mean()*100:.1f}%")
+                        agreement_percent = agreement.mean() * 100
+                        
+                        st.markdown(f"""
+                        <div class='metric-card'>
+                            <h3 style='color: #764ba2; margin-top: 0;'>Model Agreement</h3>
+                            <div style='text-align: center; margin: 15px 0;'>
+                                <h1 style='color: #764ba2; font-size: 2.5rem; margin: 0;'>{agreement.sum():,}</h1>
+                                <p style='color: #666; font-size: 0.9rem;'>Agreeing Texts</p>
+                            </div>
+                            <p><strong>📊 Agreement Rate:</strong> {agreement_percent:.1f}%</p>
+                            <p><strong>🤝 Consensus:</strong> {results_df['Consensus'].value_counts().index[0] if len(results_df['Consensus'].value_counts()) > 0 else 'N/A'}</p>
+                            <p><strong>🔀 Disagreements:</strong> {len(results_df) - agreement.sum():,}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
                     # Display results
                     with st.expander("📊 **View Results**", expanded=True):
@@ -1323,7 +1574,8 @@ def create_batch_analysis_tab(analyzer):
                             xaxis_title="Sentiment",
                             yaxis_title="Count",
                             barmode='group',
-                            height=500
+                            height=500,
+                            plot_bgcolor='rgba(240,242,246,0.8)'
                         )
                         
                         st.plotly_chart(fig, use_container_width=True)
@@ -1360,7 +1612,8 @@ def create_batch_analysis_tab(analyzer):
                                 yaxis_title="Score",
                                 yaxis_range=[0, 1],
                                 barmode='group',
-                                height=500
+                                height=500,
+                                plot_bgcolor='rgba(240,242,246,0.8)'
                             )
                             
                             st.plotly_chart(fig, use_container_width=True)
@@ -1386,7 +1639,8 @@ def create_batch_analysis_tab(analyzer):
                         
                         fig.update_layout(
                             title="Model Agreement Analysis",
-                            height=500
+                            height=500,
+                            plot_bgcolor='rgba(240,242,246,0.8)'
                         )
                         
                         st.plotly_chart(fig, use_container_width=True)
@@ -1395,7 +1649,7 @@ def create_batch_analysis_tab(analyzer):
             st.error(f"❌ **Error loading file:** {str(e)}")
 
 # ==========================
-# PERFORMANCE TAB
+# PERFORMANCE TAB - UPDATED WITH COLORED BACKGROUNDS
 # ==========================
 def create_performance_tab(analyzer):
     """Performance comparison tab"""
@@ -1456,7 +1710,8 @@ def create_performance_tab(analyzer):
             )),
         showlegend=True,
         height=500,
-        title="Performance Radar Chart"
+        title="Performance Radar Chart",
+        plot_bgcolor='rgba(240,242,246,0.8)'
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -1468,26 +1723,71 @@ def create_performance_tab(analyzer):
     
     with col1:
         improvement = (0.556 - 0.540) / 0.540 * 100
-        st.metric("🎯 Accuracy", f"+{improvement:.1f}%", "vs Base VADER")
+        st.markdown(f"""
+        <div class='metric-card'>
+            <h3 style='color: #667eea; margin-top: 0;'>🎯 Accuracy</h3>
+            <div style='text-align: center; margin: 15px 0;'>
+                <h1 style='color: #667eea; font-size: 2.5rem; margin: 0;'>+{improvement:.1f}%</h1>
+                <p style='color: #666; font-size: 0.9rem;'>vs Base VADER</p>
+            </div>
+            <p><strong>Enhanced:</strong> 55.6%</p>
+            <p><strong>Base VADER:</strong> 54.0%</p>
+            <p><strong>TextBlob:</strong> 50.2%</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col2:
         improvement = (0.542 - 0.530) / 0.530 * 100
-        st.metric("📊 Macro F1", f"+{improvement:.1f}%", "vs Base VADER")
+        st.markdown(f"""
+        <div class='metric-card'>
+            <h3 style='color: #667eea; margin-top: 0;'>📊 Macro F1</h3>
+            <div style='text-align: center; margin: 15px 0;'>
+                <h1 style='color: #667eea; font-size: 2.5rem; margin: 0;'>+{improvement:.1f}%</h1>
+                <p style='color: #666; font-size: 0.9rem;'>vs Base VADER</p>
+            </div>
+            <p><strong>Enhanced:</strong> 54.2%</p>
+            <p><strong>Base VADER:</strong> 53.0%</p>
+            <p><strong>TextBlob:</strong> 47.1%</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col3:
         improvement = (0.488 - 0.485) / 0.485 * 100
-        st.metric("🔴 Negative F1", f"+{improvement:.1f}%", "vs Base VADER")
+        st.markdown(f"""
+        <div class='metric-card'>
+            <h3 style='color: #667eea; margin-top: 0;'>🔴 Negative F1</h3>
+            <div style='text-align: center; margin: 15px 0;'>
+                <h1 style='color: #667eea; font-size: 2.5rem; margin: 0;'>+{improvement:.1f}%</h1>
+                <p style='color: #666; font-size: 0.9rem;'>vs Base VADER</p>
+            </div>
+            <p><strong>Enhanced:</strong> 48.8%</p>
+            <p><strong>Base VADER:</strong> 48.5%</p>
+            <p><strong>TextBlob:</strong> 34.9%</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col4:
         improvement = (0.561 - 0.543) / 0.543 * 100
-        st.metric("🟢 Positive F1", f"+{improvement:.1f}%", "vs Base VADER")
+        st.markdown(f"""
+        <div class='metric-card'>
+            <h3 style='color: #667eea; margin-top: 0;'>🟢 Positive F1</h3>
+            <div style='text-align: center; margin: 15px 0;'>
+                <h1 style='color: #667eea; font-size: 2.5rem; margin: 0;'>+{improvement:.1f}%</h1>
+                <p style='color: #666; font-size: 0.9rem;'>vs Base VADER</p>
+            </div>
+            <p><strong>Enhanced:</strong> 56.1%</p>
+            <p><strong>Base VADER:</strong> 54.3%</p>
+            <p><strong>TextBlob:</strong> 51.2%</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Statistical significance
     st.markdown("### 📊 **Statistical Significance**")
     
     st.markdown("""
     <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                color: white; padding: 20px; border-radius: 10px;'>
+                color: white; border-radius: 10px; padding: 20px; margin: 20px 0; 
+                border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 5px 15px rgba(0,0,0,0.2);'>
         <h4 style='color: white; margin-top: 0;'>McNemar's Test Results</h4>
         <p><strong>Enhanced vs Base VADER:</strong> χ² = 11.79, p < 0.001 🎯</p>
         <p><strong>Enhanced vs TextBlob:</strong> χ² = 49.82, p < 0.001 🎯</p>
@@ -1496,7 +1796,7 @@ def create_performance_tab(analyzer):
     """, unsafe_allow_html=True)
 
 # ==========================
-# VISUALIZATIONS TAB
+# VISUALIZATIONS TAB - UPDATED WITH COLORED BACKGROUNDS
 # ==========================
 def create_visualizations_tab(analyzer):
     """Advanced visualizations tab"""
@@ -1510,7 +1810,9 @@ def create_visualizations_tab(analyzer):
     
     with col1:
         st.markdown("""
-        <div style='background: white; border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); height: 300px;'>
+        <div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); 
+                    border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+                    height: 300px; border-left: 5px solid #667eea;'>
             <h3 style='color: #667eea;'>🧠 Domain Lexicon</h3>
             <ul style='color: #666;'>
                 <li>+38 car-specific terms</li>
@@ -1526,8 +1828,10 @@ def create_visualizations_tab(analyzer):
     
     with col2:
         st.markdown("""
-        <div style='background: white; border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); height: 300px;'>
-            <h3 style='color: #667eea;'>⚡ Sentence Dominance</h3>
+        <div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); 
+                    border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+                    height: 300px; border-left: 5px solid #06D6A0;'>
+            <h3 style='color: #06D6A0;'>⚡ Sentence Dominance</h3>
             <ul style='color: #666;'>
                 <li>Strong negative: ≤ -0.25</li>
                 <li>Strong positive: ≥ 0.45</li>
@@ -1542,8 +1846,10 @@ def create_visualizations_tab(analyzer):
     
     with col3:
         st.markdown("""
-        <div style='background: white; border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); height: 300px;'>
-            <h3 style='color: #667eea;'>🎛️ Optimized Thresholds</h3>
+        <div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); 
+                    border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+                    height: 300px; border-left: 5px solid #FFD166;'>
+            <h3 style='color: #FFD166;'>🎛️ Optimized Thresholds</h3>
             <ul style='color: #666;'>
                 <li>Positive: 0.30</li>
                 <li>Negative: -0.05</li>
@@ -1608,7 +1914,7 @@ def create_footer():
     """, unsafe_allow_html=True)
 
 # ==========================
-# MAIN APP - FIXED VERSION
+# MAIN APP
 # ==========================
 def main():
     """Main Streamlit app"""
