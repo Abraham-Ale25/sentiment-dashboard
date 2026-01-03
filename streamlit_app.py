@@ -112,6 +112,27 @@ class EnhancedSentimentAnalyzer:
         sentences = re.split(r'(?<=[.!?])\s+', text)
         return [s.strip() for s in sentences if s.strip()]
 
+    def analyze_batch(self, df, text_column='text'):
+        # Clean missing values
+        df = df.dropna(subset=[text_column]).reset_index(drop=True)
+        df = df[df[text_column].notnull()]
+        
+        results = pd.DataFrame()
+        results['text'] = df[text_column]
+        
+        results['TextBlob'] = results['text'].apply(self.textblob_predict)
+        results['VADER_Base'] = results['text'].apply(self.vader_base_predict)
+        results['VADER_Enhanced'] = results['text'].apply(self.enhanced_vader_predict)
+        
+        results['Consensus'] = results[['TextBlob', 'VADER_Base', 'VADER_Enhanced']].mode(axis=1)[0]
+        
+        results['Agreement_Count'] = results.apply(
+            lambda row: len(set([row['TextBlob'], row['VADER_Base'], row['VADER_Enhanced']])),
+            axis=1
+        )
+        
+        return results
+
 analyzer = EnhancedSentimentAnalyzer()
 
 st.set_page_config(page_title="Enhanced VADER Sentiment Analysis", layout="wide")
@@ -159,12 +180,12 @@ with tab1:
             vb = analyzer.vader_base_predict(text)
             ve = analyzer.enhanced_vader_predict(text)
             
-            # Create dummy labeled data for single text (assume enhanced as 'label' for demo purposes)
+            # Create mini DF for single analysis (assume enhanced as 'label' for demo metrics)
             df_single = pd.DataFrame({
-                'label': [ve, ve, ve],
-                'tb_label': [tb, tb, tb],
-                'vader_base_label': [vb, vb, vb],
-                'vader_enh_label': [ve, ve, ve]
+                'label': [ve],
+                'tb_label': [tb],
+                'vader_base_label': [vb],
+                'vader_enh_label': [ve]
             })
             
             # Compute metrics
@@ -175,7 +196,7 @@ with tab1:
                 neg_f1 = f1_score(df_single['label'], df_single[col], labels=['negative'], average='binary', zero_division=0)
                 metrics.append({'Model': name, 'Accuracy': f"{acc:.3f}", 'Macro F1': f"{macro_f1:.3f}", 'Negative F1': f"{neg_f1:.3f}"})
             
-            # Results table with accuracy, macro F1, negative F1
+            # Results table with metrics
             st.markdown("<h3 style='color:#1e293b;'>📊 Analysis Results</h3>", unsafe_allow_html=True)
             st.table(pd.DataFrame(metrics))
             
@@ -190,6 +211,34 @@ with tab1:
                 </ul>
             </div>
             """, unsafe_allow_html=True)
+            
+            # Visualization for single analysis
+            st.markdown("<h3 style='color:#1e293b;'>📊 Visualization for This Analysis</h3>", unsafe_allow_html=True)
+            
+            pred_counts = pd.Series([tb, vb, ve]).value_counts()
+            fig_bar, ax_bar = plt.subplots(figsize=(8, 5))
+            ax_bar.bar(pred_counts.index, pred_counts.values, color=['#EF476F', '#FFD166', '#06D6A0'])
+            ax_bar.set_title('Prediction Distribution')
+            ax_bar.set_ylabel('Count')
+            st.pyplot(fig_bar)
+            
+            fig_pie, ax_pie = plt.subplots(figsize=(6, 6))
+            ax_pie.pie(pred_counts.values, labels=pred_counts.index, colors=['#EF476F', '#FFD166', '#06D6A0'], autopct='%1.1f%%', startangle=90)
+            ax_pie.set_title('Prediction Distribution')
+            st.pyplot(fig_pie)
+            
+            # Confusion Matrix for single (simplified as 3x3 with one point)
+            cm = np.zeros((3,3))
+            label_map = {'negative': 0, 'neutral': 1, 'positive': 2}
+            true_idx = label_map.get(ve.lower(), 1)
+            pred_idx = label_map.get(ve.lower(), 1)
+            cm[true_idx, pred_idx] = 1
+            fig_cm, ax_cm = plt.subplots(figsize=(8, 6))
+            sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', xticklabels=['Negative', 'Neutral', 'Positive'], yticklabels=['Negative', 'Neutral', 'Positive'], ax=ax_cm)
+            ax_cm.set_title('Confusion Matrix for Enhanced VADER (Single Analysis)')
+            ax_cm.set_xlabel('Predicted')
+            ax_cm.set_ylabel('True')
+            st.pyplot(fig_cm)
         else:
             st.error("Please enter some text.")
 
@@ -205,12 +254,9 @@ with tab2:
             content.seek(0)
             lines = [l.strip() for l in content.readlines() if l.strip()]
             df = pd.DataFrame({'text': lines})
+        df = df.dropna(subset=[text_col]).reset_index(drop=True)
         if text_col in df.columns:
-            results = pd.DataFrame()
-            results['text'] = df[text_col]
-            results['TextBlob'] = results['text'].apply(analyzer.textblob_predict)
-            results['VADER_Base'] = results['text'].apply(analyzer.vader_base_predict)
-            results['VADER_Enhanced'] = results['text'].apply(analyzer.enhanced_vader_predict)
+            results = analyzer.analyze_batch(df, text_col)
             st.success(f"Analyzed {len(results)} texts!")
             st.dataframe(results.head(20))
             csv = results.to_csv(index=False).encode()
@@ -230,6 +276,16 @@ with tab2:
             ax_pie.pie(pred_counts.values, labels=pred_counts.index, colors=['#EF476F', '#FFD166', '#06D6A0'], autopct='%1.1f%%', startangle=90)
             ax_pie.set_title('Enhanced VADER Prediction Distribution')
             st.pyplot(fig_pie)
+            
+            # Confusion matrix for batch (assume 'label' column if present, else skip)
+            if 'label' in results.columns:
+                cm = confusion_matrix(results['label'], results['VADER_Enhanced'], labels=['negative', 'neutral', 'positive'])
+                fig_cm, ax_cm = plt.subplots(figsize=(8, 6))
+                sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', xticklabels=['Negative', 'Neutral', 'Positive'], yticklabels=['Negative', 'Neutral', 'Positive'], ax=ax_cm)
+                ax_cm.set_title('Confusion Matrix - Enhanced VADER (Batch Analysis)')
+                ax_cm.set_xlabel('Predicted')
+                ax_cm.set_ylabel('True')
+                st.pyplot(fig_cm)
         else:
             st.error(f"Column '{text_col}' not found.")
 
@@ -239,6 +295,7 @@ with tab3:
     perf_file = st.file_uploader("Test CSV", type='csv', key="perf")
     if perf_file:
         df_test = pd.read_csv(perf_file)
+        df_test = df_test.dropna(subset=['label']).reset_index(drop=True)
         required = ['label', 'tb_label', 'vader_base_label', 'vader_enh_label']
         if all(c in df_test.columns for c in required):
             y_true = df_test['label']
@@ -259,6 +316,7 @@ with tab4:
     viz_file = st.file_uploader("Test CSV", type='csv', key="viz")
     if viz_file:
         df_test = pd.read_csv(viz_file)
+        df_test = df_test.dropna(subset=['label']).reset_index(drop=True)
         required = ['label', 'tb_label', 'vader_base_label', 'vader_enh_label']
         if all(c in df_test.columns for c in required):
             models = ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)']
