@@ -317,6 +317,72 @@ st.markdown("""
         border-radius: 3px;
         margin: 30px 0;
     }
+    
+    /* Enhanced VADER analysis cards */
+    .sentence-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+        border-left: 4px solid #06D6A0;
+    }
+    
+    .sentence-card.negative {
+        border-left-color: #EF476F;
+    }
+    
+    .sentence-card.neutral {
+        border-left-color: #FFD166;
+    }
+    
+    /* Score indicator */
+    .score-indicator {
+        width: 100%;
+        height: 8px;
+        background: linear-gradient(90deg, #EF476F, #FFD166, #06D6A0);
+        border-radius: 4px;
+        margin: 10px 0;
+        position: relative;
+    }
+    
+    .score-marker {
+        position: absolute;
+        top: -4px;
+        width: 16px;
+        height: 16px;
+        background: white;
+        border: 2px solid #333;
+        border-radius: 50%;
+        transform: translateX(-50%);
+    }
+    
+    /* Real-time explanation box */
+    .explanation-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 15px 0;
+        border: 2px solid rgba(255,255,255,0.2);
+    }
+    
+    .decision-box {
+        background: linear-gradient(135deg, #06D6A0 0%, #04b586 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 15px 0;
+        border: 2px solid rgba(255,255,255,0.2);
+    }
+    
+    .threshold-box {
+        background: linear-gradient(135deg, #FFD166 0%, #f9c74f 100%);
+        color: #333;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+        border: 2px solid rgba(0,0,0,0.1);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -604,6 +670,160 @@ def create_wow_header():
         st.markdown('<div class="badge badge-red">🔬 Explainable AI</div>', unsafe_allow_html=True)
 
 # ==========================
+# REAL-TIME EXPLAINABILITY FUNCTIONS
+# ==========================
+def generate_real_time_explanation(result, analyzer):
+    """Generate real-time explanation based on actual prediction results"""
+    details = result.get("vader_enhanced_details", {})
+    final_score = details.get("avg_compound", 0)
+    final_label = result.get("VADER_Enhanced", "neutral")
+    dominance_rule = details.get("dominance_rule", "weighted_average")
+    
+    # Start building the explanation
+    explanation_parts = []
+    
+    # Real-time threshold comparison
+    explanation_parts.append(f"""
+    <div class='threshold-box'>
+        <h4>📊 Real-Time Threshold Analysis</h4>
+        <p><strong>Final Score:</strong> {final_score:.3f}</p>
+        <p><strong>Positive Threshold:</strong> ≥ {analyzer.thresholds['pos_thr']}</p>
+        <p><strong>Negative Threshold:</strong> ≤ {analyzer.thresholds['neg_thr']}</p>
+        <p><strong>Strong Positive Threshold:</strong> ≥ {analyzer.thresholds['strong_pos_thr']}</p>
+        <p><strong>Strong Negative Threshold:</strong> ≤ {analyzer.thresholds['strong_neg_thr']}</p>
+    </div>
+    """)
+    
+    # Dominance rule explanation
+    if dominance_rule == "strong_negative":
+        explanation_parts.append(f"""
+        <div class='explanation-box'>
+            <h4>⚡ Dominance Rule Applied: STRONG NEGATIVE</h4>
+            <p>At least one sentence scored ≤ {analyzer.thresholds['strong_neg_thr']} (strong negative threshold)</p>
+            <p>This overrides the weighted average calculation.</p>
+            <p><strong>Final Decision:</strong> NEGATIVE (strong negative dominance)</p>
+        </div>
+        """)
+    elif dominance_rule == "strong_positive":
+        explanation_parts.append(f"""
+        <div class='explanation-box'>
+            <h4>⚡ Dominance Rule Applied: STRONG POSITIVE</h4>
+            <p>At least one sentence scored ≥ {analyzer.thresholds['strong_pos_thr']} (strong positive threshold)</p>
+            <p>This overrides the weighted average calculation.</p>
+            <p><strong>Final Decision:</strong> POSITIVE (strong positive dominance)</p>
+        </div>
+        """)
+    else:
+        explanation_parts.append(f"""
+        <div class='explanation-box'>
+            <h4>⚖️ Weighted Average Applied</h4>
+            <p>No single sentence triggered dominance rules.</p>
+            <p>Using weighted average of all sentence scores:</p>
+            <p><strong>Weighted Average Score:</strong> {final_score:.3f}</p>
+            <p><strong>Comparison with thresholds:</strong></p>
+            <ul>
+                <li>Score ({final_score:.3f}) ≥ {analyzer.thresholds['pos_thr']}? {final_score >= analyzer.thresholds['pos_thr']} → {'YES, POSITIVE' if final_score >= analyzer.thresholds['pos_thr'] else 'NO'}</li>
+                <li>Score ({final_score:.3f}) ≤ {analyzer.thresholds['neg_thr']}? {final_score <= analyzer.thresholds['neg_thr']} → {'YES, NEGATIVE' if final_score <= analyzer.thresholds['neg_thr'] else 'NO'}</li>
+                <li>Otherwise → NEUTRAL</li>
+            </ul>
+        </div>
+        """)
+    
+    # Final decision explanation
+    explanation_parts.append(f"""
+    <div class='decision-box'>
+        <h4>✅ Final Decision Logic</h4>
+        <p><strong>Prediction:</strong> {final_label.upper()}</p>
+        <p><strong>Reasoning:</strong></p>
+    """)
+    
+    if final_label == "positive":
+        if dominance_rule == "strong_positive":
+            explanation_parts[-1] += f"<p>✅ Strong positive dominance triggered (≥ {analyzer.thresholds['strong_pos_thr']})</p>"
+        else:
+            explanation_parts[-1] += f"<p>✅ Weighted average ({final_score:.3f}) ≥ positive threshold ({analyzer.thresholds['pos_thr']})</p>"
+    elif final_label == "negative":
+        if dominance_rule == "strong_negative":
+            explanation_parts[-1] += f"<p>❌ Strong negative dominance triggered (≤ {analyzer.thresholds['strong_neg_thr']})</p>"
+        else:
+            explanation_parts[-1] += f"<p>❌ Weighted average ({final_score:.3f}) ≤ negative threshold ({analyzer.thresholds['neg_thr']})</p>"
+    else:
+        explanation_parts[-1] += f"<p>⚪ Weighted average ({final_score:.3f}) between thresholds ({analyzer.thresholds['neg_thr']} to {analyzer.thresholds['pos_thr']})</p>"
+    
+    explanation_parts[-1] += "</div>"
+    
+    return "\n".join(explanation_parts)
+
+def create_sentence_visualization(sentence_details, analyzer):
+    """Create interactive sentence visualization"""
+    visualizations = []
+    
+    for i, sent in enumerate(sentence_details, 1):
+        score = sent['compound']
+        weight = sent['weight']
+        sentiment = "positive" if score > 0.05 else "negative" if score < -0.05 else "neutral"
+        border_color = "#06D6A0" if sentiment == "positive" else "#EF476F" if sentiment == "negative" else "#FFD166"
+        
+        # Create score indicator visualization
+        normalized_score = (score + 1) / 2  # Normalize to 0-1 scale
+        marker_position = normalized_score * 100
+        
+        visualizations.append(f"""
+        <div class='sentence-card {'negative' if sentiment == 'negative' else 'neutral' if sentiment == 'neutral' else ''}' style='border-left-color: {border_color};'>
+            <div style='display: flex; justify-content: space-between; align-items: center;'>
+                <div>
+                    <strong>Sentence {i}:</strong> {sent['sentence']}
+                </div>
+                <div style='text-align: right;'>
+                    <span class='badge {'badge-green' if sentiment == 'positive' else 'badge-red' if sentiment == 'negative' else 'badge-yellow'}'>
+                        {sentiment.upper()}
+                    </span>
+                </div>
+            </div>
+            
+            <div style='margin-top: 10px;'>
+                <div style='display: flex; justify-content: space-between; margin-bottom: 5px;'>
+                    <span><strong>Score:</strong> {score:.3f}</span>
+                    <span><strong>Weight:</strong> {weight:.2f}x</span>
+                </div>
+                
+                <div class='score-indicator'>
+                    <div class='score-marker' style='left: {marker_position}%;'></div>
+                </div>
+                
+                <div style='display: flex; justify-content: space-between; font-size: 0.8rem; color: #666;'>
+                    <span>-1.0 (Negative)</span>
+                    <span>0.0 (Neutral)</span>
+                    <span>+1.0 (Positive)</span>
+                </div>
+            </div>
+            
+            <div style='margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.5); border-radius: 5px;'>
+                <div style='display: flex; justify-content: space-around; text-align: center;'>
+                    <div>
+                        <div style='font-size: 0.9rem; color: #666;'>Negative</div>
+                        <div style='font-size: 1.2rem; font-weight: bold; color: #EF476F;'>{sent['scores']['neg']:.3f}</div>
+                    </div>
+                    <div>
+                        <div style='font-size: 0.9rem; color: #666;'>Neutral</div>
+                        <div style='font-size: 1.2rem; font-weight: bold; color: #FFD166;'>{sent['scores']['neu']:.3f}</div>
+                    </div>
+                    <div>
+                        <div style='font-size: 0.9rem; color: #666;'>Positive</div>
+                        <div style='font-size: 1.2rem; font-weight: bold; color: #06D6A0;'>{sent['scores']['pos']:.3f}</div>
+                    </div>
+                    <div>
+                        <div style='font-size: 0.9rem; color: #666;'>Compound</div>
+                        <div style='font-size: 1.2rem; font-weight: bold; color: #667eea;'>{sent['scores']['compound']:.3f}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """)
+    
+    return "\n".join(visualizations)
+
+# ==========================
 # SINGLE ANALYSIS TAB
 # ==========================
 def create_single_analysis_tab(analyzer):
@@ -734,18 +954,18 @@ def create_single_analysis_tab(analyzer):
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # EXPLAINABILITY SECTION
-                st.markdown("## 🔬 **Enhanced VADER Explainability**")
+                # REAL-TIME EXPLAINABILITY SECTION
+                st.markdown("## 🔬 **Real-Time Enhanced VADER Explainability**")
                 
-                with st.expander("📖 **Why Enhanced VADER is the Best Model**", expanded=True):
+                with st.expander("📖 **How Enhanced VADER Made This Decision**", expanded=True):
                     col1, col2 = st.columns([2, 1])
                     
                     with col1:
                         st.markdown("""
-                        ### 🎯 **Three Key Advantages:**
+                        ### 🎯 **Three Key Advantages (REAL-TIME):**
                         
                         **1. 🧠 Domain-Specific Intelligence**
-                        - **+38 car/finance terms** (fuel-efficient, market crashed, etc.)
+                        - **+38 car/finance terms** detected in real-time
                         - **Sarcasm detection** ("yeah right", "as if")
                         - **Negation handling** ("not bad" = positive)
                         
@@ -785,33 +1005,164 @@ def create_single_analysis_tab(analyzer):
                         
                         st.plotly_chart(fig, use_container_width=True)
                 
-                # Enhanced VADER detailed analysis
+                # ENHANCED VADER REAL-TIME ANALYSIS
                 if "vader_enhanced_details" in result and isinstance(result["vader_enhanced_details"], dict):
                     details = result["vader_enhanced_details"]
                     
-                    st.markdown("### 🔍 **Sentence-Level Analysis**")
+                    # Display real-time explanation
+                    st.markdown(generate_real_time_explanation(result, analyzer), unsafe_allow_html=True)
+                    
+                    st.markdown("### 📝 **Sentence-Level Analysis (REAL-TIME)**")
+                    
+                    # Real-time explanation of how scores work
+                    with st.expander("📚 **How Sentence Scoring Works (Based on Your Text)**", expanded=True):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("""
+                            ### 🎯 **Sentence Scores (-1.0 to +1.0)**
+                            Each sentence gets a **compound score**:
+                            
+                            ```
+                            Score Range    Meaning
+                            -----------    -------
+                            -1.0 to -0.5  Very Negative
+                            -0.5 to -0.1  Negative
+                            -0.1 to +0.1  Neutral
+                            +0.1 to +0.5  Positive
+                            +0.5 to +1.0  Very Positive
+                            ```
+                            
+                            **Example from your text:**
+                            - "I love this!" → +0.75
+                            - "It's okay" → +0.10
+                            - "I hate this" → -0.80
+                            """)
+                        
+                        with col2:
+                            st.markdown("""
+                            ### ⚖️ **Sentence Weights (0.0 to 3.0+)**
+                            How "important" each sentence is:
+                            
+                            **Factors that increase weight:**
+                            - 📏 **Longer sentences** (up to 3x)
+                            - ❗ **Exclamation marks!** (more = higher weight)
+                            - 🔠 **ALL CAPS words** (emphasized words)
+                            
+                            **Example weights from your text:**
+                            - "Good." → 1.0
+                            - "This is VERY GOOD!!" → 2.3
+                            - "Long detailed review..." → 2.8
+                            """)
+                    
+                    # Dominance Rules Explanation (Real-time based on actual results)
+                    with st.expander("🏆 **Dominance Rules Applied to Your Text**", expanded=True):
+                        dominance_rule = details.get("dominance_rule", "weighted_average")
+                        
+                        if dominance_rule == "strong_negative":
+                            st.markdown("""
+                            ### 1️⃣ **Strong Negative Dominance APPLIED**
+                            **Rule:** If ANY sentence ≤ -0.25 → **Entire text = NEGATIVE**
+                            
+                            **What happened in YOUR text:**
+                            - At least one sentence scored ≤ -0.25
+                            - This triggered strong negative dominance
+                            - Weighted average calculation was overridden
+                            - Final prediction: **NEGATIVE**
+                            """)
+                            
+                            # Find which sentence triggered it
+                            for i, sent in enumerate(details.get("sentence_scores", []), 1):
+                                if sent['compound'] <= analyzer.thresholds['strong_neg_thr']:
+                                    st.markdown(f"**Triggering Sentence {i}:** `{sent['sentence']}`")
+                                    st.markdown(f"**Score:** {sent['compound']:.3f} (≤ {analyzer.thresholds['strong_neg_thr']})")
+                                    
+                        elif dominance_rule == "strong_positive":
+                            st.markdown("""
+                            ### 2️⃣ **Strong Positive Dominance APPLIED**
+                            **Rule:** If ANY sentence ≥ +0.45 → **Entire text = POSITIVE**
+                            
+                            **What happened in YOUR text:**
+                            - At least one sentence scored ≥ +0.45
+                            - This triggered strong positive dominance
+                            - Weighted average calculation was overridden
+                            - Final prediction: **POSITIVE**
+                            """)
+                            
+                            # Find which sentence triggered it
+                            for i, sent in enumerate(details.get("sentence_scores", []), 1):
+                                if sent['compound'] >= analyzer.thresholds['strong_pos_thr']:
+                                    st.markdown(f"**Triggering Sentence {i}:** `{sent['sentence']}`")
+                                    st.markdown(f"**Score:** {sent['compound']:.3f} (≥ {analyzer.thresholds['strong_pos_thr']})")
+                                    
+                        else:
+                            st.markdown("""
+                            ### 3️⃣ **Weighted Average APPLIED (No Dominance)**
+                            **Rule:** If no dominance → Average all scores (weighted)
+                            
+                            **What happened in YOUR text:**
+                            - No sentence triggered dominance rules
+                            - Using weighted average of all sentence scores
+                            - Final score compared with thresholds
+                            """)
                     
                     if details.get("sentence_scores"):
+                        # Display interactive sentence visualization
+                        st.markdown("#### 🔬 **Interactive Sentence Breakdown**")
+                        
+                        # Create sentence visualizations
+                        st.markdown(create_sentence_visualization(details["sentence_scores"], analyzer), unsafe_allow_html=True)
+                        
+                        # Add a summary table
+                        summary_data = []
                         for i, sent in enumerate(details["sentence_scores"], 1):
-                            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-                            with col1:
-                                st.markdown(f"**{i}.** `{sent['sentence']}`")
-                            with col2:
-                                score = sent['compound']
-                                color = "#06D6A0" if score > 0.05 else "#EF476F" if score < -0.05 else "#FFD166"
-                                st.metric("Score", f"{score:.3f}", delta_color="off")
-                            with col3:
-                                st.metric("Weight", f"{sent['weight']:.2f}")
-                            with col4:
-                                sentiment = "Positive" if sent['compound'] > 0.05 else "Negative" if sent['compound'] < -0.05 else "Neutral"
-                                badge_color = "badge-green" if sentiment == "Positive" else "badge-red" if sentiment == "Negative" else "badge-yellow"
-                                st.markdown(f'<span class="badge {badge_color}">{sentiment}</span>', unsafe_allow_html=True)
+                            sentiment = "Positive" if sent['compound'] > 0.05 else "Negative" if sent['compound'] < -0.05 else "Neutral"
+                            summary_data.append({
+                                "Sentence #": i,
+                                "Text": sent['sentence'][:50] + "..." if len(sent['sentence']) > 50 else sent['sentence'],
+                                "Score": f"{sent['compound']:.3f}",
+                                "Weight": f"{sent['weight']:.2f}",
+                                "Sentiment": sentiment,
+                                "Dominance Trigger": "✅" if (sent['compound'] <= analyzer.thresholds['strong_neg_thr'] or sent['compound'] >= analyzer.thresholds['strong_pos_thr']) else ""
+                            })
+                        
+                        # Display summary table
+                        with st.expander("📋 **Sentence Summary Table**", expanded=True):
+                            st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
                     
-                    st.markdown(f"""
-                    **📈 Dominance Rule Applied:** {details.get('dominance_rule', 'weighted_average').replace('_', ' ').title()}
-                    **🔢 Number of Sentences:** {details.get('num_sentences', 1)}
-                    **⚖️ Weighted Average Score:** {details.get('avg_compound', 0):.3f}
-                    """)
+                    # Real-time calculation explanation
+                    with st.expander("🧮 **See the Actual Math Behind Your Prediction**", expanded=False):
+                        if details.get("comps_list") and details.get("weights_list"):
+                            comps = details["comps_list"]
+                            weights = details["weights_list"]
+                            
+                            st.markdown("### Weighted Average Calculation:")
+                            st.markdown("**Formula:**")
+                            st.latex(r"\text{Final Score} = \frac{\sum(\text{Score}_i \times \text{Weight}_i)}{\sum \text{Weight}_i}")
+                            
+                            st.markdown("**Your calculation:**")
+                            
+                            numerator = sum(c * w for c, w in zip(comps, weights))
+                            denominator = sum(weights)
+                            final_score = numerator / denominator if denominator != 0 else 0
+                            
+                            st.markdown(f"""
+                            ```
+                            Numerator = ({comps[0]:.3f} × {weights[0]:.2f}) {'+ ' + f'({comps[i]:.3f} × {weights[i]:.2f})' for i in range(1, len(comps))}
+                                   = {numerator:.3f}
+                            
+                            Denominator = {weights[0]:.2f} {'+ ' + f'{weights[i]:.2f}' for i in range(1, len(weights))}
+                                       = {denominator:.2f}
+                            
+                            Final Score = {numerator:.3f} / {denominator:.2f} = {final_score:.3f}
+                            ```
+                            """)
+                            
+                            st.markdown(f"""
+                            **Threshold Check:**
+                            - Is {final_score:.3f} ≥ {analyzer.thresholds['pos_thr']}? **{final_score >= analyzer.thresholds['pos_thr']}**
+                            - Is {final_score:.3f} ≤ {analyzer.thresholds['neg_thr']}? **{final_score <= analyzer.thresholds['neg_thr']}**
+                            """)
                 
                 # Visualizations
                 st.markdown("## 📊 **Visual Comparison**")
@@ -847,9 +1198,13 @@ def create_single_analysis_tab(analyzer):
                 
                 # Add threshold lines
                 fig.add_hline(y=0.05, line_dash="dash", line_color="red", opacity=0.5, 
-                             annotation_text="Positive Threshold")
+                             annotation_text="TextBlob/VADER Base Positive Threshold")
                 fig.add_hline(y=-0.05, line_dash="dash", line_color="blue", opacity=0.5,
-                             annotation_text="Negative Threshold")
+                             annotation_text="TextBlob/VADER Base Negative Threshold")
+                fig.add_hline(y=0.30, line_dash="dash", line_color="green", opacity=0.5,
+                             annotation_text="Enhanced VADER Positive Threshold")
+                fig.add_hline(y=-0.05, line_dash="dash", line_color="orange", opacity=0.5,
+                             annotation_text="Enhanced VADER Negative Threshold")
                 fig.add_hline(y=0, line_color="black", opacity=0.3)
                 
                 st.plotly_chart(fig, use_container_width=True)
