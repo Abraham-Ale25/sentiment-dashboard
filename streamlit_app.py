@@ -27,6 +27,15 @@ class EnhancedSentimentAnalyzer:
             'strong_neg_thr': -0.25,
             'strong_pos_thr': 0.45
         }
+        
+        self.color_palette = {
+            "TextBlob": "#EF476F",
+            "VADER (Base)": "#118AB2",
+            "VADER (Enhanced)": "#06D6A0",
+            "negative": "#EF476F",
+            "neutral": "#FFD166",
+            "positive": "#06D6A0"
+        }
 
     def textblob_predict(self, text):
         polarity = TextBlob(text).sentiment.polarity
@@ -150,67 +159,37 @@ with tab1:
             vb = analyzer.vader_base_predict(text)
             ve = analyzer.enhanced_vader_predict(text)
             
-            # Create a small DataFrame for visualization
+            # Create dummy labeled data for single text (assume enhanced as 'label' for demo purposes)
             df_single = pd.DataFrame({
-                'Model': ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)'],
-                'Prediction': [tb, vb, ve]
+                'label': [ve, ve, ve],
+                'tb_label': [tb, tb, tb],
+                'vader_base_label': [vb, vb, vb],
+                'vader_enh_label': [ve, ve, ve]
             })
             
-            # Results table without score
-            html = f"""
-            <div style='background:#f8fafc; padding:20px; border-radius:10px; margin-top:20px;'>
-                <h3 style='color:#1e293b;'>📊 Analysis Results</h3>
-                <div style='background:#f1f5f9; padding:15px; border-radius:5px; margin-bottom:20px;'>
-                    <strong>Analyzed Text:</strong><br><em>"{text[:200]}{'...' if len(text)>200 else ''}"</em>
-                </div>
-                <table style='width:100%; border-collapse:collapse;'>
-                    <tr style='background:#1e293b; color:white;'>
-                        <th style='padding:12px;'>Model</th><th>Prediction</th><th>Details</th>
-                    </tr>
-                    <tr>
-                        <td><strong>TextBlob</strong></td>
-                        <td><span style='color:#EF476F;font-weight:bold'>{tb.upper()}</span></td>
-                        <td>Polarity-based</td>
-                    </tr>
-                    <tr>
-                        <td><strong>VADER (Base)</strong></td>
-                        <td><span style='color:#118AB2;font-weight:bold'>{vb.upper()}</span></td>
-                        <td>Document-level</td>
-                    </tr>
-                    <tr>
-                        <td><strong>VADER (Enhanced)</strong></td>
-                        <td><span style='color:#06D6A0;font-weight:bold;border:2px solid #06D6A0;padding:4px 8px;border-radius:4px'>{ve.upper()}</span></td>
-                        <td>Custom lexicon + tuned thresholds</td>
-                    </tr>
-                </table>
-                <div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'>
-                    <strong>Enhanced VADER Features:</strong>
-                    <ul>
-                        <li>Custom Lexicon: Domain-specific words for car, finance, sarcasm</li>
-                        <li>Tuned Thresholds: Positive ≥ 0.30, Negative ≤ -0.05</li>
-                        <li>Strong Dominance Rules Applied</li>
-                    </ul>
-                </div>
+            # Compute metrics
+            metrics = []
+            for name, col in [('TextBlob', 'tb_label'), ('VADER (Base)', 'vader_base_label'), ('VADER (Enhanced)', 'vader_enh_label')]:
+                acc = accuracy_score(df_single['label'], df_single[col])
+                macro_f1 = f1_score(df_single['label'], df_single[col], average='macro', zero_division=0)
+                neg_f1 = f1_score(df_single['label'], df_single[col], labels=['negative'], average='binary', zero_division=0)
+                metrics.append({'Model': name, 'Accuracy': f"{acc:.3f}", 'Macro F1': f"{macro_f1:.3f}", 'Negative F1': f"{neg_f1:.3f}"})
+            
+            # Results table with accuracy, macro F1, negative F1
+            st.markdown("<h3 style='color:#1e293b;'>📊 Analysis Results</h3>", unsafe_allow_html=True)
+            st.table(pd.DataFrame(metrics))
+            
+            # Explainability
+            st.markdown("""
+            <div style='background:#e3f2fd;padding:15px;border-radius:8px;margin-top:20px;'>
+                <strong>Enhanced VADER Features:</strong>
+                <ul>
+                    <li>Custom Lexicon: Domain-specific words for car, finance, sarcasm</li>
+                    <li>Tuned Thresholds: Positive ≥ 0.30, Negative ≤ -0.05</li>
+                    <li>Strong Dominance Rules Applied</li>
+                </ul>
             </div>
-            """
-            st.markdown(html, unsafe_allow_html=True)
-            
-            # Visualization for single analysis
-            st.markdown("<h3 style='color:#1e293b;'>📊 Visualization for This Analysis</h3>", unsafe_allow_html=True)
-            
-            # Bar chart for predictions
-            pred_counts = df_single['Prediction'].value_counts()
-            fig_bar, ax_bar = plt.subplots(figsize=(8, 5))
-            pred_counts.plot(kind='bar', color=['#EF476F', '#FFD166', '#06D6A0'])
-            ax_bar.set_title('Prediction Distribution')
-            ax_bar.set_ylabel('Count')
-            st.pyplot(fig_bar)
-            
-            # Pie chart
-            fig_pie, ax_pie = plt.subplots(figsize=(6, 6))
-            ax_pie.pie(pred_counts.values, labels=pred_counts.index, colors=['#EF476F', '#FFD166', '#06D6A0'], autopct='%1.1f%%', startangle=90)
-            ax_pie.set_title('Prediction Distribution')
-            st.pyplot(fig_pie)
+            """, unsafe_allow_html=True)
         else:
             st.error("Please enter some text.")
 
@@ -229,9 +208,9 @@ with tab2:
         if text_col in df.columns:
             results = pd.DataFrame()
             results['text'] = df[text_col]
-            results['TextBlob'] = results['text'].apply(lambda t: analyzer.textblob_predict(t))
-            results['VADER_Base'] = results['text'].apply(lambda t: analyzer.vader_base_predict(t))
-            results['VADER_Enhanced'] = results['text'].apply(lambda t: analyzer.enhanced_vader_predict(t))
+            results['TextBlob'] = results['text'].apply(analyzer.textblob_predict)
+            results['VADER_Base'] = results['text'].apply(analyzer.vader_base_predict)
+            results['VADER_Enhanced'] = results['text'].apply(analyzer.enhanced_vader_predict)
             st.success(f"Analyzed {len(results)} texts!")
             st.dataframe(results.head(20))
             csv = results.to_csv(index=False).encode()
@@ -239,9 +218,10 @@ with tab2:
             
             # Visualization for batch
             st.markdown("<h3 style='color:#1e293b;'>📊 Batch Visualization</h3>", unsafe_allow_html=True)
+            
             pred_counts = results['VADER_Enhanced'].value_counts()
             fig_bar, ax_bar = plt.subplots(figsize=(8, 5))
-            pred_counts.plot(kind='bar', color=['#EF476F', '#FFD166', '#06D6A0'])
+            ax_bar.bar(pred_counts.index, pred_counts.values, color=['#EF476F', '#FFD166', '#06D6A0'])
             ax_bar.set_title('Enhanced VADER Prediction Distribution')
             ax_bar.set_ylabel('Count')
             st.pyplot(fig_bar)
@@ -255,7 +235,7 @@ with tab2:
 
 with tab3:
     st.markdown("<h2 style='color:#1e293b;'>📈 Model Performance</h2>", unsafe_allow_html=True)
-    st.write("Upload test CSV with columns: label, tb_label, vader_base_label, vader_enh_label")
+    st.write("Upload test CSV with columns: label, tb_label, vader_base_label, vader_enh_label to see Accuracy, Macro F1, and Negative F1")
     perf_file = st.file_uploader("Test CSV", type='csv', key="perf")
     if perf_file:
         df_test = pd.read_csv(perf_file)
