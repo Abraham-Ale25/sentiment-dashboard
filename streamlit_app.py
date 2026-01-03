@@ -27,30 +27,30 @@ st.set_page_config(
 # ==========================
 st.markdown("""
 <style>
-    /* Main background - SOLID CLEAR COLOR */
+    /* Main background - CLEAN BLUE-GREEN GRADIENT */
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
         padding-top: 0 !important;
     }
     
-    /* Fix main container - SOLID WHITE BACKGROUND */
+    /* Fix main container - CLEAN WHITE WITH SHADOW */
     .main-container {
         background: white !important;
         border-radius: 20px;
         padding: 30px;
         margin: 20px auto;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
         position: relative;
         z-index: 1;
         max-width: 95%;
-        border: 1px solid #e0e0e0;
+        border: 1px solid #e8e8e8;
     }
     
     /* Enhanced headers - CLEAR AND SHARP */
     .main-title {
         font-size: 3.5rem !important;
         font-weight: 800 !important;
-        background: linear-gradient(90deg, #667eea, #764ba2, #f093fb) !important;
+        background: linear-gradient(90deg, #667eea, #764ba2, #06D6A0) !important;
         -webkit-background-clip: text !important;
         -webkit-text-fill-color: transparent !important;
         text-align: center;
@@ -64,10 +64,10 @@ st.markdown("""
     
     .sub-title {
         font-size: 1.2rem !important;
-        color: #666 !important;
+        color: #555 !important;
         text-align: center;
         margin-bottom: 2rem !important;
-        font-weight: 300 !important;
+        font-weight: 400 !important;
     }
     
     /* Fix Streamlit's default spacing issues */
@@ -83,14 +83,14 @@ st.markdown("""
         z-index: 2;
     }
     
-    /* Enhanced metric cards - SOLID CLEAR BACKGROUNDS */
+    /* Enhanced metric cards - CLEAN DESIGN */
     .metric-card {
         background: white !important;
         border-radius: 15px;
         padding: 25px;
         margin: 10px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-        border: 2px solid #e0e0e0;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        border: 2px solid #e8e8e8;
         transition: all 0.3s ease;
         height: 100%;
         position: relative;
@@ -98,9 +98,9 @@ st.markdown("""
     }
     
     .metric-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 35px rgba(0,0,0,0.15);
-        border-color: #667eea;
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        border-color: #06D6A0;
     }
     
     /* Best model highlight */
@@ -110,8 +110,8 @@ st.markdown("""
         border-radius: 15px;
         padding: 25px;
         margin: 10px;
-        box-shadow: 0 15px 35px rgba(6, 214, 160, 0.3);
-        border: 3px solid #04b586;
+        box-shadow: 0 10px 30px rgba(6, 214, 160, 0.25);
+        border: 2px solid #04b586;
         animation: pulse 2s infinite;
         height: 100%;
         position: relative;
@@ -119,12 +119,12 @@ st.markdown("""
     }
     
     @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(6, 214, 160, 0.4); }
-        70% { box-shadow: 0 0 0 15px rgba(6, 214, 160, 0); }
+        0% { box-shadow: 0 0 0 0 rgba(6, 214, 160, 0.3); }
+        70% { box-shadow: 0 0 0 10px rgba(6, 214, 160, 0); }
         100% { box-shadow: 0 0 0 0 rgba(6, 214, 160, 0); }
     }
     
-    /* Tab styling - SOLID CLEAR BACKGROUNDS */
+    /* Tab styling - CLEAN DESIGN */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background: transparent;
@@ -135,7 +135,7 @@ st.markdown("""
         border-radius: 10px 10px 0 0;
         padding: 15px 25px;
         font-weight: 600;
-        border: 2px solid #e0e0e0;
+        border: 2px solid #e8e8e8;
         margin-right: 5px;
         transition: all 0.3s ease;
     }
@@ -143,14 +143,14 @@ st.markdown("""
     .stTabs [data-baseweb="tab"]:hover {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
-        transform: translateY(-3px);
+        transform: translateY(-2px);
     }
     
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
         border-color: #667eea;
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     }
     
     /* Button styling */
@@ -166,8 +166,8 @@ st.markdown("""
     }
     
     .stButton button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3) !important;
     }
     
     /* Progress bar */
@@ -175,31 +175,32 @@ st.markdown("""
         background: linear-gradient(90deg, #667eea, #764ba2);
     }
     
-    /* Text area - CLEAR BACKGROUND */
+    /* Text area - CLEAN DESIGN */
     .stTextArea textarea {
         border-radius: 10px !important;
-        border: 2px solid #e0e0e0 !important;
+        border: 2px solid #e8e8e8 !important;
         padding: 15px !important;
         font-size: 1rem !important;
         background: white !important;
     }
     
     .stTextArea textarea:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+        border-color: #06D6A0 !important;
+        box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1) !important;
     }
     
-    /* Select box - CLEAR BACKGROUND */
+    /* Select box - CLEAN DESIGN */
     .stSelectbox div[data-baseweb="select"] {
         border-radius: 10px !important;
         background: white !important;
     }
     
-    /* Dataframe styling - CLEAR BACKGROUND */
+    /* Dataframe styling - CLEAN DESIGN */
     .stDataFrame {
         border-radius: 10px !important;
         overflow: hidden !important;
         background: white !important;
+        border: 1px solid #e8e8e8 !important;
     }
     
     /* Hide Streamlit branding */
@@ -210,12 +211,13 @@ st.markdown("""
     /* Custom divider */
     .divider {
         height: 3px;
-        background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+        background: linear-gradient(90deg, #667eea, #764ba2, #06D6A0);
         border-radius: 3px;
         margin: 30px 0;
+        opacity: 0.8;
     }
     
-    /* Enhanced VADER analysis cards - SOLID CLEAR BACKGROUNDS */
+    /* Enhanced VADER analysis cards - CLEAN DESIGN */
     .explanation-box {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
@@ -223,7 +225,7 @@ st.markdown("""
         padding: 20px !important;
         margin: 15px 0 !important;
         border: 2px solid rgba(255,255,255,0.2) !important;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2) !important;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
     }
     
     .decision-box {
@@ -233,7 +235,7 @@ st.markdown("""
         padding: 20px !important;
         margin: 15px 0 !important;
         border: 2px solid rgba(255,255,255,0.2) !important;
-        box-shadow: 0 5px 15px rgba(6, 214, 160, 0.3) !important;
+        box-shadow: 0 5px 15px rgba(6, 214, 160, 0.2) !important;
     }
     
     .threshold-box {
@@ -243,7 +245,7 @@ st.markdown("""
         padding: 15px !important;
         margin: 10px 0 !important;
         border: 2px solid rgba(0,0,0,0.1) !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1) !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.08) !important;
     }
     
     .sentence-card {
@@ -252,22 +254,20 @@ st.markdown("""
         padding: 15px !important;
         margin: 10px 0 !important;
         border-left: 4px solid #06D6A0 !important;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.08) !important;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.06) !important;
+        border: 1px solid #f0f0f0 !important;
     }
     
     .sentence-card.negative {
         border-left-color: #EF476F !important;
-        background: white !important;
     }
     
     .sentence-card.neutral {
         border-left-color: #FFD166 !important;
-        background: white !important;
     }
     
     .sentence-card.positive {
         border-left-color: #06D6A0 !important;
-        background: white !important;
     }
     
     /* Score indicator */
@@ -341,32 +341,7 @@ st.markdown("""
         background: transparent !important;
     }
     
-    /* Ensure our styles override Streamlit */
-    .explanation-box h4,
-    .explanation-box p,
-    .explanation-box strong,
-    .explanation-box ul,
-    .explanation-box li {
-        color: white !important;
-    }
-    
-    .threshold-box h4,
-    .threshold-box p,
-    .threshold-box strong,
-    .threshold-box ul,
-    .threshold-box li {
-        color: #333 !important;
-    }
-    
-    .decision-box h4,
-    .decision-box p,
-    .decision-box strong,
-    .decision-box ul,
-    .decision-box li {
-        color: white !important;
-    }
-    
-    /* Expander styling - CLEAR BACKGROUND */
+    /* Expander styling - CLEAN DESIGN */
     .streamlit-expanderHeader {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
@@ -379,19 +354,19 @@ st.markdown("""
         background: white !important;
         border-radius: 0 0 10px 10px !important;
         padding: 20px !important;
-        border: 1px solid rgba(102, 126, 234, 0.2) !important;
+        border: 1px solid #e8e8e8 !important;
         border-top: none !important;
     }
     
-    /* Chart containers - CLEAR BACKGROUND */
+    /* Chart containers - CLEAN DESIGN */
     .js-plotly-plot {
         background: white !important;
         border-radius: 10px !important;
         padding: 15px !important;
-        border: 1px solid #e0e0e0 !important;
+        border: 1px solid #e8e8e8 !important;
     }
     
-    /* Quick stats box - SOLID CLEAR BACKGROUND */
+    /* Quick stats box - CLEAN DESIGN */
     .quick-stats-box {
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
         color: white !important;
@@ -399,27 +374,15 @@ st.markdown("""
         padding: 20px !important;
         margin: 10px 0 !important;
         border: 2px solid rgba(255,255,255,0.2) !important;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08) !important;
     }
     
-    /* File uploader - CLEAR BACKGROUND */
+    /* File uploader - CLEAN DESIGN */
     .stFileUploader {
         background: white !important;
         border-radius: 10px !important;
         padding: 15px !important;
         border: 2px dashed #667eea !important;
-    }
-    
-    /* Data table styling - CLEAR BACKGROUND */
-    .dataframe {
-        background: white !important;
-        border-radius: 10px !important;
-        overflow: hidden !important;
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
     }
     
     /* Model comparison legend styling */
@@ -428,8 +391,8 @@ st.markdown("""
         border-radius: 10px;
         padding: 15px;
         margin: 10px 0;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border: 1px solid #e8e8e8;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.04);
     }
     
     .legend-title {
@@ -484,7 +447,7 @@ class EnhancedVADERPipeline:
         # Your actual expanded lexicon from the pipeline
         self._load_enhanced_lexicon()
         
-        # Color palette for visualizations - CONSISTENT ACROSS ALL CHARTS
+        # Color palette for visualizations - FIXED: Consistent naming
         self.color_palette = {
             "TextBlob": "#EF476F",        # Red
             "VADER (Base)": "#118AB2",    # Blue
@@ -733,7 +696,7 @@ class EnhancedVADERPipeline:
         return result
     
     def get_consistent_model_colors(self):
-        """Return consistent color mapping for models"""
+        """Return consistent color mapping for models - FIXED VERSION"""
         return {
             "TextBlob": self.color_palette["TextBlob"],
             "VADER (Base)": self.color_palette["VADER (Base)"],
@@ -770,7 +733,7 @@ def create_model_legend(analyzer):
         # Title
         st.markdown('<div class="legend-title">Model Identification</div>', unsafe_allow_html=True)
         
-        # Get consistent colors
+        # Get consistent colors - FIXED: Use correct model names
         model_colors = analyzer.get_consistent_model_colors()
         
         # Create legend items
@@ -1081,24 +1044,28 @@ def create_single_analysis_tab(analyzer):
                         """)
                     
                     with col2:
-                        # Performance comparison chart
+                        # Performance comparison chart - FIXED: Using correct model names
+                        models_chart = ["TextBlob", "VADER (Base)", "VADER (Enhanced)"]
+                        accuracy_values = [0.502, 0.540, 0.556]
+                        
                         fig = go.Figure(data=[
-                            go.Bar(name='TextBlob', x=['Accuracy'], y=[0.502], 
-                                   marker_color=analyzer.color_palette['TextBlob'],
-                                   hovertemplate='<b>TextBlob</b><br>Accuracy: 50.2%<extra></extra>'),
-                            go.Bar(name='VADER (Base)', x=['Accuracy'], y=[0.540], 
-                                   marker_color=analyzer.color_palette['VADER (Base)'],
-                                   hovertemplate='<b>VADER (Base)</b><br>Accuracy: 54.0%<extra></extra>'),
-                            go.Bar(name='Enhanced VADER', x=['Accuracy'], y=[0.556], 
-                                   marker_color=analyzer.color_palette['VADER (Enhanced)'],
-                                   hovertemplate='<b>Enhanced VADER</b><br>Accuracy: 55.6%<extra></extra>')
+                            go.Bar(
+                                x=models_chart, 
+                                y=accuracy_values,
+                                marker_color=[
+                                    analyzer.color_palette["TextBlob"],
+                                    analyzer.color_palette["VADER (Base)"],
+                                    analyzer.color_palette["VADER (Enhanced)"]
+                                ],
+                                hovertemplate='<b>%{x}</b><br>Accuracy: %{y:.3f}<extra></extra>'
+                            )
                         ])
                         
                         fig.update_layout(
                             title="Model Accuracy Comparison",
                             yaxis_title="Accuracy",
                             yaxis_range=[0, 1],
-                            showlegend=True,
+                            showlegend=False,
                             height=300,
                             plot_bgcolor='white',
                             paper_bgcolor='white',
@@ -1261,8 +1228,8 @@ def create_single_analysis_tab(analyzer):
                 # Add metric legend
                 create_metric_legend()
                 
-                # Create grouped bar chart for Accuracy and Macro F1
-                models = ["TextBlob", "VADER (Base)", "Enhanced VADER"]
+                # Create grouped bar chart for Accuracy and Macro F1 - FIXED: Using correct model names
+                models_chart = ["TextBlob", "VADER (Base)", "VADER (Enhanced)"]
                 accuracy_scores = [0.502, 0.540, 0.556]
                 macro_f1_scores = [0.471, 0.530, 0.542]
                 
@@ -1272,16 +1239,16 @@ def create_single_analysis_tab(analyzer):
                 fig = go.Figure(data=[
                     go.Bar(
                         name='Accuracy',
-                        x=models,
+                        x=models_chart,
                         y=accuracy_scores,
-                        marker_color=[model_colors[model] for model in models],
+                        marker_color=[model_colors[model] for model in models_chart],
                         text=[f'{acc:.1%}' for acc in accuracy_scores],
                         textposition='auto',
                         hovertemplate='<b>%{x}</b><br>Accuracy: %{y:.3f}<extra></extra>'
                     ),
                     go.Bar(
                         name='Macro F1',
-                        x=models,
+                        x=models_chart,
                         y=macro_f1_scores,
                         marker_color=['#F28F9D', '#5AB3D0', '#5AE2BB'],  # Lighter shades of model colors
                         text=[f'{f1:.1%}' for f1 in macro_f1_scores],
@@ -1396,7 +1363,7 @@ def create_single_analysis_tab(analyzer):
                 fig_f1 = go.Figure(data=[
                     go.Bar(
                         name='Negative F1',
-                        x=models,
+                        x=models_chart,
                         y=[0.349, 0.485, 0.488],
                         marker_color='#EF476F',
                         text=[f'{val:.1%}' for val in [0.349, 0.485, 0.488]],
@@ -1405,7 +1372,7 @@ def create_single_analysis_tab(analyzer):
                     ),
                     go.Bar(
                         name='Positive F1',
-                        x=models,
+                        x=models_chart,
                         y=[0.512, 0.543, 0.561],
                         marker_color='#06D6A0',
                         text=[f'{val:.1%}' for val in [0.512, 0.543, 0.561]],
@@ -1434,7 +1401,7 @@ def create_single_analysis_tab(analyzer):
                 
                 st.plotly_chart(fig_f1, use_container_width=True)
                 
-                # Pie chart for predictions (if you still want to show the current prediction distribution)
+                # Pie chart for predictions
                 st.markdown("### 🥧 **Current Text Prediction Distribution**")
                 
                 predictions = [result["TextBlob"], result["VADER_Base"], result["VADER_Enhanced"]]
@@ -1593,7 +1560,7 @@ def create_batch_analysis_tab(analyzer):
                     st.markdown("## 📈 **Batch Analysis Visualizations**")
                     
                     # Create tabs for different visualizations
-                    viz_tab1, viz_tab2, viz_tab3 = st.tabs(["📊 Distribution", "📈 Comparison", "🤝 Agreement"])
+                    viz_tab1, viz_tab2 = st.tabs(["📊 Distribution", "🤝 Agreement"])
                     
                     with viz_tab1:
                         fig = go.Figure()
