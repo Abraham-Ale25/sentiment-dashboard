@@ -674,7 +674,7 @@ def create_single_analysis_tab(analyzer):
                         st.plotly_chart(fig, use_container_width=True)
                 
                 # Enhanced VADER detailed analysis
-                if "vader_enhanced_details" in result and isinstance(result["vader_enhanced_details"], dict"):
+                if "vader_enhanced_details" in result and isinstance(result["vader_enhanced_details"], dict):
                     details = result["vader_enhanced_details"]
                     
                     st.markdown("### 🔍 **Sentence-Level Analysis**")
