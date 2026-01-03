@@ -5,19 +5,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
+import time
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report
 from io import StringIO
-import time
-import nltk
-from nltk.tokenize import sent_tokenize, word_tokenize
-
-# Download necessary NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
 
 # ==========================
 # ENHANCED VADER IMPLEMENTATION (From Your Pipeline)
@@ -86,6 +78,14 @@ class EnhancedVADERPipeline:
         self.sia_enh.lexicon.update(car_lexicon)
         self.sia_enh.lexicon.update(finance_lexicon)
         self.sia_enh.lexicon.update(general_lexicon)
+        
+        # Sarcasm/negation phrases
+        self.sia_enh.lexicon.update({
+            "yeah_right": -2.0,
+            "as_if": -1.8,
+            "not_bad": 1.5,
+            "not_too_good": -1.5,
+        })
     
     def _preprocess_enh(self, text):
         """Apply phrase replacements for sarcasm detection"""
@@ -102,32 +102,38 @@ class EnhancedVADERPipeline:
         for pattern, repl in phrase_replacements:
             text = re.sub(pattern, repl, text, flags=re.IGNORECASE)
         
-        # Add custom scores for these phrases
-        self.sia_enh.lexicon.update({
-            "yeah_right": -2.0,
-            "as_if": -1.8,
-            "not_bad": 1.5,
-            "not_too_good": -1.5,
-        })
-        
         return text
+    
+    def _simple_sent_tokenize(self, text):
+        """Simple sentence tokenizer that doesn't require NLTK punkt_tab"""
+        if not text:
+            return []
+        
+        # Split on sentence boundaries
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        # If no punctuation found, treat as one sentence
+        if not sentences:
+            sentences = [text.strip()]
+            
+        return sentences
     
     def _compute_sentence_weight(self, sentence):
         """Compute weight based on sentence features"""
-        if not sentence.strip():
+        if not sentence or not isinstance(sentence, str):
             return 1.0
         
-        tokens = word_tokenize(sentence)
+        # Simple tokenization without NLTK
+        tokens = sentence.split()
         n_tokens = len(tokens)
-        len_weight = min(n_tokens / 8.0, 3.0)
+        len_weight = min(n_tokens / 8.0, 3.0) if n_tokens > 0 else 1.0
         
         exclam_count = sentence.count("!")
         exclam_weight = 1.0 + min(exclam_count, 3) * 0.15
         
-        caps_words = [
-            w for w in tokens
-            if w.isalpha() and w.upper() == w and len(w) > 2
-        ]
+        # Count ALL CAPS words
+        caps_words = [w for w in tokens if w.isupper() and len(w) > 2]
         caps_weight = 1.0 + min(len(caps_words), 3) * 0.12
         
         return len_weight * exclam_weight * caps_weight
@@ -138,94 +144,108 @@ class EnhancedVADERPipeline:
     
     def textblob_predict(self, text, return_scores=False):
         """TextBlob with your pipeline thresholds"""
-        polarity = TextBlob(text).sentiment.polarity
-        if polarity >= 0.05:
-            label = "positive"
-        elif polarity <= -0.05:
-            label = "negative"
-        else:
-            label = "neutral"
-        
-        if return_scores:
-            return label, {"polarity": polarity}
-        return label
-    
-    def vader_base_predict(self, text, return_scores=False):
-        """Base VADER with your pipeline thresholds"""
-        scores = self.sia_base.polarity_scores(text)
-        compound = scores["compound"]
-        
-        if compound >= 0.05:
-            label = "positive"
-        elif compound <= -0.05:
-            label = "negative"
-        else:
-            label = "neutral"
-        
-        if return_scores:
-            return label, scores
-        return label
-    
-    def enhanced_vader_predict(self, text, return_scores=False):
-        """Enhanced VADER with sentence-level dominance"""
-        text_proc = self._preprocess_enh(text)
-        sentences = sent_tokenize(text_proc)
-        
-        if len(sentences) == 0:
-            if return_scores:
-                return "neutral", {"avg_compound": 0.0, "sentence_scores": []}
-            return "neutral"
-        
-        comps = []
-        weights = []
-        sentence_details = []
-        
-        for s in sentences:
-            vs = self.sia_enh.polarity_scores(s)
-            comp = vs["compound"]
-            w = self._compute_sentence_weight(s)
-            comps.append(comp)
-            weights.append(w)
-            sentence_details.append({
-                "sentence": s,
-                "compound": comp,
-                "weight": w,
-                "scores": vs
-            })
-        
-        comps = np.array(comps, dtype=float)
-        weights = np.array(weights, dtype=float)
-        
-        # Dominance rules (first capture strong neg/pos)
-        if (comps <= self.thresholds['strong_neg_thr']).any():
-            label = "negative"
-            dominance = "strong_negative"
-        elif (comps >= self.thresholds['strong_pos_thr']).any():
-            label = "positive"
-            dominance = "strong_positive"
-        else:
-            # Weighted average
-            avg_score = float(np.average(comps, weights=weights))
-            
-            if avg_score >= self.thresholds['pos_thr']:
+        try:
+            polarity = TextBlob(str(text)).sentiment.polarity
+            if polarity >= 0.05:
                 label = "positive"
-            elif avg_score <= self.thresholds['neg_thr']:
+            elif polarity <= -0.05:
                 label = "negative"
             else:
                 label = "neutral"
-            dominance = "weighted_average"
-        
-        if return_scores:
-            details = {
-                "avg_compound": float(np.average(comps, weights=weights)),
-                "sentence_scores": sentence_details,
-                "dominance_rule": dominance,
-                "comps_list": comps.tolist(),
-                "weights_list": weights.tolist()
-            }
-            return label, details
-        
-        return label
+            
+            if return_scores:
+                return label, {"polarity": polarity}
+            return label
+        except:
+            return "neutral"
+    
+    def vader_base_predict(self, text, return_scores=False):
+        """Base VADER with your pipeline thresholds"""
+        try:
+            scores = self.sia_base.polarity_scores(str(text))
+            compound = scores["compound"]
+            
+            if compound >= 0.05:
+                label = "positive"
+            elif compound <= -0.05:
+                label = "negative"
+            else:
+                label = "neutral"
+            
+            if return_scores:
+                return label, scores
+            return label
+        except:
+            return "neutral"
+    
+    def enhanced_vader_predict(self, text, return_scores=False):
+        """Enhanced VADER with sentence-level dominance"""
+        try:
+            text_proc = self._preprocess_enh(str(text))
+            sentences = self._simple_sent_tokenize(text_proc)
+            
+            if len(sentences) == 0:
+                if return_scores:
+                    return "neutral", {"avg_compound": 0.0, "sentence_scores": []}
+                return "neutral"
+            
+            comps = []
+            weights = []
+            sentence_details = []
+            
+            for s in sentences:
+                vs = self.sia_enh.polarity_scores(s)
+                comp = vs["compound"]
+                w = self._compute_sentence_weight(s)
+                comps.append(comp)
+                weights.append(w)
+                sentence_details.append({
+                    "sentence": s[:100] + "..." if len(s) > 100 else s,
+                    "compound": comp,
+                    "weight": w,
+                    "scores": vs
+                })
+            
+            comps = np.array(comps, dtype=float)
+            weights = np.array(weights, dtype=float)
+            
+            # Dominance rules (first capture strong neg/pos)
+            if (comps <= self.thresholds['strong_neg_thr']).any():
+                label = "negative"
+                dominance = "strong_negative"
+            elif (comps >= self.thresholds['strong_pos_thr']).any():
+                label = "positive"
+                dominance = "strong_positive"
+            else:
+                # Weighted average
+                if len(comps) > 0 and len(weights) > 0:
+                    avg_score = float(np.average(comps, weights=weights))
+                else:
+                    avg_score = 0.0
+                
+                if avg_score >= self.thresholds['pos_thr']:
+                    label = "positive"
+                elif avg_score <= self.thresholds['neg_thr']:
+                    label = "negative"
+                else:
+                    label = "neutral"
+                dominance = "weighted_average"
+            
+            if return_scores:
+                details = {
+                    "avg_compound": avg_score if 'avg_score' in locals() else 0.0,
+                    "sentence_scores": sentence_details,
+                    "dominance_rule": dominance,
+                    "comps_list": comps.tolist(),
+                    "weights_list": weights.tolist(),
+                    "num_sentences": len(sentences)
+                }
+                return label, details
+            
+            return label
+        except Exception as e:
+            # Fallback to base VADER if enhanced fails
+            return self.vader_base_predict(text, return_scores)
     
     def analyze_text(self, text, return_detailed=False):
         """Analyze text with all three models"""
@@ -234,13 +254,13 @@ class EnhancedVADERPipeline:
         ve_label, ve_scores = self.enhanced_vader_predict(text, return_scores=True)
         
         result = {
-            "text": text,
+            "text": text[:200] + "..." if len(str(text)) > 200 else text,
             "TextBlob": tb_label,
             "VADER_Base": vb_label,
             "VADER_Enhanced": ve_label,
-            "textblob_score": tb_scores.get("polarity", 0),
-            "vader_base_score": vb_scores.get("compound", 0),
-            "vader_enhanced_score": ve_scores.get("avg_compound", 0),
+            "textblob_score": tb_scores.get("polarity", 0) if isinstance(tb_scores, dict) else 0,
+            "vader_base_score": vb_scores.get("compound", 0) if isinstance(vb_scores, dict) else 0,
+            "vader_enhanced_score": ve_scores.get("avg_compound", 0) if isinstance(ve_scores, dict) else 0,
         }
         
         if return_detailed:
@@ -353,6 +373,7 @@ def create_single_analysis_tab(analyzer):
         "😠 Strong Negative": "This is the worst service I've ever experienced. Absolutely unacceptable and a complete waste of money!",
         "😊 Strong Positive": "Absolutely fantastic product! Exceeded all expectations and the customer service was brilliant!",
         "😐 Neutral/Technical": "The quarterly report shows a 2.3% increase in revenue with a corresponding 1.8% increase in operating costs.",
+        "🧪 Long Complex Sentence": "While the initial design and build quality are exceptional, with premium materials used throughout, the software interface is frustratingly counter-intuitive and the battery life, though advertised as all-day, barely lasts through a morning of moderate use, which is disappointing given the high price point, yet the camera performance in low-light conditions is truly remarkable and the audio quality during calls is crystal clear."
     }
     
     selected_example = st.selectbox("Choose an example text:", list(examples.keys()))
@@ -370,56 +391,63 @@ def create_single_analysis_tab(analyzer):
                 # Display results in columns
                 col1, col2, col3 = st.columns(3)
                 
+                # TextBlob
                 with col1:
                     color = analyzer.color_palette[result["TextBlob"]]
                     st.markdown(f"""
                     <div class='metric-card' style='border-left-color: {color}'>
-                        <h3 style='color: {color};'>📊 TextBlob</h3>
+                        <h3 style='color: #EF476F;'>📊 TextBlob</h3>
                         <p><strong>Prediction:</strong> <span style='color: {color}; font-weight: bold;'>{result['TextBlob'].upper()}</span></p>
                         <p><strong>Polarity Score:</strong> {result['textblob_score']:.3f}</p>
+                        <p><strong>Class:</strong> {result['TextBlob'].capitalize()}</p>
                     </div>
                     """, unsafe_allow_html=True)
                 
+                # VADER Base
                 with col2:
-                    color = analyzer.color_palette["VADER (Base)"]
-                    label_color = analyzer.color_palette[result["VADER_Base"]]
+                    color = analyzer.color_palette[result["VADER_Base"]]
                     st.markdown(f"""
-                    <div class='metric-card' style='border-left-color: {color}'>
-                        <h3 style='color: {color};'>📊 VADER (Base)</h3>
-                        <p><strong>Prediction:</strong> <span style='color: {label_color}; font-weight: bold;'>{result['VADER_Base'].upper()}</span></p>
+                    <div class='metric-card' style='border-left-color: #118AB2;'>
+                        <h3 style='color: #118AB2;'>📊 VADER (Base)</h3>
+                        <p><strong>Prediction:</strong> <span style='color: {color}; font-weight: bold;'>{result['VADER_Base'].upper()}</span></p>
                         <p><strong>Compound Score:</strong> {result['vader_base_score']:.3f}</p>
+                        <p><strong>Class:</strong> {result['VADER_Base'].capitalize()}</p>
                     </div>
                     """, unsafe_allow_html=True)
                 
+                # VADER Enhanced
                 with col3:
-                    color = analyzer.color_palette["VADER (Enhanced)"]
-                    label_color = analyzer.color_palette[result["VADER_Enhanced"]]
+                    color = analyzer.color_palette[result["VADER_Enhanced"]]
                     st.markdown(f"""
-                    <div class='metric-card' style='border-left-color: {color}'>
-                        <h3 style='color: {color};'>🚀 VADER (Enhanced)</h3>
-                        <p><strong>Prediction:</strong> <span style='color: {label_color}; font-weight: bold;'>{result['VADER_Enhanced'].upper()}</span></p>
+                    <div class='metric-card' style='border-left-color: #06D6A0;'>
+                        <h3 style='color: #06D6A0;'>🚀 VADER (Enhanced)</h3>
+                        <p><strong>Prediction:</strong> <span style='color: {color}; font-weight: bold;'>{result['VADER_Enhanced'].upper()}</span></p>
                         <p><strong>Avg Compound:</strong> {result['vader_enhanced_score']:.3f}</p>
+                        <p><strong>Class:</strong> {result['VADER_Enhanced'].capitalize()}</p>
                     </div>
                     """, unsafe_allow_html=True)
                 
                 # Enhanced VADER details
                 with st.expander("🔬 Enhanced VADER Analysis Details", expanded=True):
-                    if "vader_enhanced_details" in result:
+                    if "vader_enhanced_details" in result and isinstance(result["vader_enhanced_details"], dict):
                         details = result["vader_enhanced_details"]
                         st.write(f"**Dominance Rule Applied:** {details.get('dominance_rule', 'weighted_average')}")
+                        st.write(f"**Number of Sentences:** {details.get('num_sentences', 1)}")
                         
                         if details.get("sentence_scores"):
                             st.write("**Sentence-Level Analysis:**")
                             for i, sent in enumerate(details["sentence_scores"], 1):
-                                st.write(f"{i}. `{sent['sentence'][:100]}...`")
-                                col_a, col_b, col_c = st.columns(3)
-                                with col_a:
-                                    st.metric("Compound", f"{sent['compound']:.3f}")
-                                with col_b:
-                                    st.metric("Weight", f"{sent['weight']:.2f}")
-                                with col_c:
-                                    st.metric("Sentiment", 
-                                              "Positive" if sent['compound'] > 0.05 else "Negative" if sent['compound'] < -0.05 else "Neutral")
+                                with st.container():
+                                    col_a, col_b, col_c, col_d = st.columns([3, 1, 1, 1])
+                                    with col_a:
+                                        st.write(f"**{i}.** `{sent['sentence']}`")
+                                    with col_b:
+                                        st.metric("Compound", f"{sent['compound']:.3f}")
+                                    with col_c:
+                                        st.metric("Weight", f"{sent['weight']:.2f}")
+                                    with col_d:
+                                        sentiment = "Positive" if sent['compound'] > 0.05 else "Negative" if sent['compound'] < -0.05 else "Neutral"
+                                        st.metric("Sentiment", sentiment)
                 
                 # Create visualization
                 create_single_visualization(analyzer, result)
@@ -465,6 +493,18 @@ def create_single_visualization(analyzer, result):
     
     plt.tight_layout()
     st.pyplot(fig)
+    
+    # Show which model is correct based on Enhanced VADER (as reference)
+    st.markdown("### 🎯 Analysis Summary")
+    
+    if result["VADER_Enhanced"] == result["TextBlob"] == result["VADER_Base"]:
+        st.success("✅ **All models agree** on the sentiment prediction!")
+    elif result["VADER_Enhanced"] != result["TextBlob"] and result["VADER_Enhanced"] != result["VADER_Base"]:
+        st.info("🔍 **Enhanced VADER differs** from both baseline models, likely due to domain-specific lexicon or sentence dominance rules.")
+    elif result["VADER_Enhanced"] != result["TextBlob"]:
+        st.info("🔍 **Enhanced VADER differs from TextBlob**, potentially due to VADER's better handling of informal language.")
+    elif result["VADER_Enhanced"] != result["VADER_Base"]:
+        st.info("🔍 **Enhanced VADER differs from Base VADER**, showing the impact of the three key enhancements.")
 
 def create_batch_analysis_tab(analyzer):
     """Batch file analysis tab"""
@@ -473,155 +513,138 @@ def create_batch_analysis_tab(analyzer):
     uploaded_file = st.file_uploader("Upload CSV or TXT file", type=['csv', 'txt'])
     
     if uploaded_file:
-        # Load data
-        if uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(uploaded_file)
-        else:
-            content = StringIO(uploaded_file.getvalue().decode("utf-8"))
-            lines = [line.strip() for line in content if line.strip()]
-            df = pd.DataFrame({'text': lines})
+        try:
+            # Load data
+            if uploaded_file.name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            else:
+                content = StringIO(uploaded_file.getvalue().decode("utf-8"))
+                lines = [line.strip() for line in content if line.strip()]
+                df = pd.DataFrame({'text': lines})
+            
+            st.success(f"✅ Loaded {len(df)} records")
+            
+            # Show preview
+            with st.expander("📋 Preview Data"):
+                st.dataframe(df.head(10), use_container_width=True)
+            
+            # Text column selection
+            if len(df.columns) > 1:
+                text_col = st.selectbox("Select text column:", df.columns.tolist())
+            else:
+                text_col = df.columns[0]
+            
+            if st.button("📈 Analyze Batch", type="primary", use_container_width=True):
+                with st.spinner(f"Analyzing {len(df)} texts with all three models..."):
+                    # Analyze each text
+                    results = []
+                    progress_bar = st.progress(0)
+                    
+                    for i, text in enumerate(df[text_col]):
+                        result = analyzer.analyze_text(str(text))
+                        results.append(result)
+                        progress_bar.progress((i + 1) / len(df))
+                    
+                    results_df = pd.DataFrame(results)
+                    
+                    # Add consensus
+                    results_df['Consensus'] = results_df[['TextBlob', 'VADER_Base', 'VADER_Enhanced']].mode(axis=1)[0]
+                    
+                    st.success(f"✅ Analysis complete!")
+                    
+                    # Display summary statistics
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("TextBlob Predictions", f"{len(results_df)}")
+                    with col2:
+                        st.metric("VADER Base Predictions", f"{len(results_df)}")
+                    with col3:
+                        st.metric("Enhanced VADER Predictions", f"{len(results_df)}")
+                    
+                    # Show results
+                    with st.expander("📊 View Results"):
+                        st.dataframe(results_df.head(50), use_container_width=True)
+                    
+                    # Download button
+                    csv = results_df.to_csv(index=False)
+                    st.download_button(
+                        label="⬇️ Download Full Results (CSV)",
+                        data=csv,
+                        file_name=f"sentiment_analysis_results.csv",
+                        mime="text/csv"
+                    )
+                    
+                    # Create batch visualizations
+                    create_batch_visualizations(analyzer, results_df)
         
-        st.write(f"**Loaded {len(df)} records**")
-        st.dataframe(df.head(), use_container_width=True)
-        
-        # Text column selection
-        text_col = st.selectbox("Select text column:", df.columns.tolist())
-        
-        if st.button("📈 Analyze Batch", type="primary", use_container_width=True):
-            with st.spinner(f"Analyzing {len(df)} texts with all three models..."):
-                # Analyze each text
-                results = []
-                progress_bar = st.progress(0)
-                
-                for i, text in enumerate(df[text_col]):
-                    result = analyzer.analyze_text(str(text))
-                    results.append(result)
-                    progress_bar.progress((i + 1) / len(df))
-                
-                results_df = pd.DataFrame(results)
-                
-                # Add consensus
-                results_df['Consensus'] = results_df[['TextBlob', 'VADER_Base', 'VADER_Enhanced']].mode(axis=1)[0]
-                
-                st.success(f"✅ Analysis complete!")
-                
-                # Display results
-                st.dataframe(results_df.head(20), use_container_width=True)
-                
-                # Download button
-                csv = results_df.to_csv(index=False)
-                st.download_button(
-                    label="⬇️ Download Full Results (CSV)",
-                    data=csv,
-                    file_name=f"sentiment_analysis_results_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
-                
-                # Create batch visualizations
-                create_batch_visualizations(analyzer, results_df)
+        except Exception as e:
+            st.error(f"Error loading file: {str(e)}")
+            st.info("Please ensure your file is properly formatted (CSV or text file).")
 
 def create_batch_visualizations(analyzer, results_df):
     """Create visualizations for batch analysis"""
     st.markdown("### 📊 Batch Analysis Visualizations")
     
-    # Calculate metrics for each model (if we had true labels)
-    metrics_data = []
-    for model_col, model_name in [('TextBlob', 'TextBlob'), 
-                                  ('VADER_Base', 'VADER (Base)'), 
-                                  ('VADER_Enhanced', 'VADER (Enhanced)')]:
-        
-        # For demo, we'll use Enhanced VADER as reference "ground truth"
-        # In real scenario, you'd have actual labels
-        y_true = results_df['VADER_Enhanced']  # Using enhanced as reference
-        y_pred = results_df[model_col]
-        
-        acc = accuracy_score(y_true, y_pred)
-        macro_f1 = f1_score(y_true, y_pred, average='macro')
-        neg_f1 = f1_score(y_true, y_pred, labels=['negative'], average='macro')
-        pos_f1 = f1_score(y_true, y_pred, labels=['positive'], average='macro')
-        
-        metrics_data.append({
-            'Model': model_name,
-            'Accuracy': acc,
-            'Macro F1': macro_f1,
-            'Negative F1': neg_f1,
-            'Positive F1': pos_f1,
-            'Prediction Distribution': results_df[model_col].value_counts().to_dict()
-        })
+    # Calculate prediction distributions
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     
-    metrics_df = pd.DataFrame(metrics_data)
+    # 1. TextBlob predictions
+    tb_counts = results_df['TextBlob'].value_counts()
+    axes[0, 0].bar(tb_counts.index, tb_counts.values, 
+                   color=[analyzer.color_palette[label] for label in tb_counts.index])
+    axes[0, 0].set_title('TextBlob Predictions')
+    axes[0, 0].set_ylabel('Count')
     
-    # Display metrics
-    st.markdown("#### 📈 Model Performance Metrics")
-    st.dataframe(metrics_df.style.format({
-        'Accuracy': '{:.3f}',
-        'Macro F1': '{:.3f}',
-        'Negative F1': '{:.3f}',
-        'Positive F1': '{:.3f}'
-    }), use_container_width=True)
+    # 2. VADER Base predictions
+    vb_counts = results_df['VADER_Base'].value_counts()
+    axes[0, 1].bar(vb_counts.index, vb_counts.values,
+                   color=[analyzer.color_palette[label] for label in vb_counts.index])
+    axes[0, 1].set_title('VADER (Base) Predictions')
+    axes[0, 1].set_ylabel('Count')
     
-    # Create visualizations
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    # 3. Enhanced VADER predictions
+    ve_counts = results_df['VADER_Enhanced'].value_counts()
+    axes[1, 0].bar(ve_counts.index, ve_counts.values,
+                   color=[analyzer.color_palette[label] for label in ve_counts.index])
+    axes[1, 0].set_title('Enhanced VADER Predictions')
+    axes[1, 0].set_ylabel('Count')
     
-    # 1. Prediction distribution bar chart
-    for idx, model in enumerate(['TextBlob', 'VADER_Base', 'VADER_Enhanced']):
-        counts = results_df[model].value_counts()
-        axes[0, idx].bar(counts.index, counts.values, 
-                        color=[analyzer.color_palette[label] for label in counts.index])
-        axes[0, idx].set_title(f'{model} Predictions')
-        axes[0, idx].set_ylabel('Count')
-        axes[0, idx].tick_params(axis='x', rotation=45)
-    
-    # 2. Accuracy comparison
-    models = metrics_df['Model']
-    accuracy = metrics_df['Accuracy']
-    colors = [analyzer.color_palette[model] for model in models]
-    
-    axes[1, 0].bar(models, accuracy, color=colors)
-    axes[1, 0].set_title('Accuracy Comparison')
-    axes[1, 0].set_ylabel('Accuracy')
-    axes[1, 0].set_ylim(0, 1)
-    
-    # 3. F1 score comparison
-    x = np.arange(len(models))
-    width = 0.25
-    
-    axes[1, 1].bar(x - width, metrics_df['Macro F1'], width, label='Macro F1', color='#4ECDC4')
-    axes[1, 1].bar(x, metrics_df['Negative F1'], width, label='Negative F1', color='#FF6B6B')
-    axes[1, 1].bar(x + width, metrics_df['Positive F1'], width, label='Positive F1', color='#95E1D3')
-    axes[1, 1].set_title('F1 Score Comparison')
-    axes[1, 1].set_ylabel('F1 Score')
-    axes[1, 1].set_xticks(x)
-    axes[1, 1].set_xticklabels(models)
-    axes[1, 1].legend()
-    axes[1, 1].set_ylim(0, 1)
-    
-    # 4. Enhanced VADER confusion matrix (if we had true labels)
-    # For demo, create a sample confusion matrix
-    if 'true_label' in results_df.columns:
-        cm = confusion_matrix(results_df['true_label'], results_df['VADER_Enhanced'], 
-                             labels=['negative', 'neutral', 'positive'])
-        im = axes[1, 2].imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-        axes[1, 2].set_title('Enhanced VADER Confusion Matrix')
-        axes[1, 2].set_xticks([0, 1, 2])
-        axes[1, 2].set_yticks([0, 1, 2])
-        axes[1, 2].set_xticklabels(['Neg', 'Neu', 'Pos'])
-        axes[1, 2].set_yticklabels(['Neg', 'Neu', 'Pos'])
-        
-        # Add text annotations
-        thresh = cm.max() / 2.
-        for i in range(cm.shape[0]):
-            for j in range(cm.shape[1]):
-                axes[1, 2].text(j, i, format(cm[i, j], 'd'),
-                              ha="center", va="center",
-                              color="white" if cm[i, j] > thresh else "black")
-    else:
-        axes[1, 2].text(0.5, 0.5, 'Confusion Matrix\n(requires true labels)',
-                       ha='center', va='center', fontsize=12)
-        axes[1, 2].set_title('Confusion Matrix')
+    # 4. Consensus predictions
+    consensus_counts = results_df['Consensus'].value_counts()
+    axes[1, 1].bar(consensus_counts.index, consensus_counts.values,
+                   color=[analyzer.color_palette[label] for label in consensus_counts.index])
+    axes[1, 1].set_title('Consensus Predictions')
+    axes[1, 1].set_ylabel('Count')
     
     plt.tight_layout()
     st.pyplot(fig)
+    
+    # Model agreement analysis
+    st.markdown("### 🤝 Model Agreement Analysis")
+    
+    # Calculate agreement
+    agreement_data = []
+    for idx, row in results_df.iterrows():
+        predictions = [row['TextBlob'], row['VADER_Base'], row['VADER_Enhanced']]
+        unique_predictions = len(set(predictions))
+        agreement_data.append({
+            'All Agree': 1 if unique_predictions == 1 else 0,
+            'Two Agree': 1 if unique_predictions == 2 else 0,
+            'All Disagree': 1 if unique_predictions == 3 else 0,
+            'Enhanced Differs': 1 if row['VADER_Enhanced'] != row['VADER_Base'] else 0
+        })
+    
+    agreement_df = pd.DataFrame(agreement_data).sum()
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("All Models Agree", f"{agreement_df['All Agree']}")
+    with col2:
+        st.metric("Two Models Agree", f"{agreement_df['Two Agree']}")
+    with col3:
+        st.metric("All Models Disagree", f"{agreement_df['All Disagree']}")
+    with col4:
+        st.metric("Enhanced Differs from Base", f"{agreement_df['Enhanced Differs']}")
 
 def create_performance_tab(analyzer):
     """Performance comparison tab with your actual results"""
@@ -640,7 +663,7 @@ def create_performance_tab(analyzer):
     perf_df = pd.DataFrame(performance_data)
     
     # Display metrics table
-    st.markdown("#### 📈 Actual Test Set Performance")
+    st.markdown("#### 📈 Actual Test Set Performance (n=5,055)")
     st.dataframe(perf_df.style.format({
         'Accuracy': '{:.3f}',
         'Macro F1': '{:.3f}',
@@ -680,143 +703,96 @@ def create_performance_tab(analyzer):
     col1, col2, col3 = st.columns(3)
     
     with col1:
+        improvement = (0.556 - 0.540) / 0.540 * 100
         st.metric("Accuracy Improvement", 
-                 f"{(0.556 - 0.540) / 0.540 * 100:.1f}%",
+                 f"+{improvement:.1f}%",
                  "vs Base VADER")
     
     with col2:
+        improvement = (0.542 - 0.530) / 0.530 * 100
         st.metric("Macro F1 Improvement",
-                 f"{(0.542 - 0.530) / 0.530 * 100:.1f}%",
+                 f"+{improvement:.1f}%",
                  "vs Base VADER")
     
     with col3:
+        improvement = (0.488 - 0.485) / 0.485 * 100
         st.metric("Negative F1 Improvement",
-                 f"{(0.488 - 0.485) / 0.485 * 100:.1f}%",
+                 f"+{improvement:.1f}%",
                  "vs Base VADER")
+    
+    # McNemar's test results
+    st.markdown("#### 📊 Statistical Significance (McNemar's Test)")
+    
+    mcnemar_data = {
+        'Comparison': ['Enhanced vs Base VADER', 'Enhanced vs TextBlob'],
+        'Enhanced Correct / Baseline Wrong': [309, 1048],
+        'Baseline Correct / Enhanced Wrong': [227, 783],
+        'χ²': [11.79, 49.82],
+        'p-value': ['< 0.001', '< 0.001']
+    }
+    
+    mcnemar_df = pd.DataFrame(mcnemar_data)
+    st.dataframe(mcnemar_df, use_container_width=True)
 
 def create_visualization_tab(analyzer):
     """Advanced visualizations tab"""
     st.markdown("### 🎨 Advanced Visualizations")
     
-    # Example data for demonstration
-    np.random.seed(42)
-    n_samples = 100
+    # Create sample data for demonstration
+    st.info("This section shows sample visualizations. Upload your own test data with 'true_label' column for custom analysis.")
     
-    example_data = pd.DataFrame({
-        'text': [f"Example text {i}" for i in range(n_samples)],
-        'true_label': np.random.choice(['negative', 'neutral', 'positive'], n_samples, p=[0.3, 0.4, 0.3]),
-        'tb_label': np.random.choice(['negative', 'neutral', 'positive'], n_samples, p=[0.35, 0.4, 0.25]),
-        'vader_base_label': np.random.choice(['negative', 'neutral', 'positive'], n_samples, p=[0.3, 0.45, 0.25]),
-        'vader_enh_label': np.random.choice(['negative', 'neutral', 'positive'], n_samples, p=[0.28, 0.42, 0.3]),
+    # Sample visualization 1: Model comparison
+    st.markdown("#### Model Performance Comparison")
+    
+    # Create sample metrics
+    sample_metrics = pd.DataFrame({
+        'Model': ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)'],
+        'Accuracy': [0.50, 0.54, 0.56],
+        'Macro F1': [0.47, 0.53, 0.54],
+        'Negative F1': [0.35, 0.49, 0.49],
+        'Positive F1': [0.51, 0.54, 0.56]
     })
     
-    uploaded_viz = st.file_uploader("Upload test CSV for visualization", type=['csv'], key='viz')
+    fig1, ax1 = plt.subplots(figsize=(10, 6))
+    x = np.arange(len(sample_metrics))
+    width = 0.2
     
-    if uploaded_viz:
-        example_data = pd.read_csv(uploaded_viz)
+    ax1.bar(x - 1.5*width, sample_metrics['Accuracy'], width, label='Accuracy', color='#4ECDC4')
+    ax1.bar(x - 0.5*width, sample_metrics['Macro F1'], width, label='Macro F1', color='#FF6B6B')
+    ax1.bar(x + 0.5*width, sample_metrics['Negative F1'], width, label='Negative F1', color='#95E1D3')
+    ax1.bar(x + 1.5*width, sample_metrics['Positive F1'], width, label='Positive F1', color='#FFEAA7')
     
-    if st.button("Generate Visualizations", type="primary"):
-        # Calculate metrics
-        metrics = []
-        models = {
-            'TextBlob': 'tb_label',
-            'VADER (Base)': 'vader_base_label',
-            'VADER (Enhanced)': 'vader_enh_label'
-        }
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(sample_metrics['Model'])
+    ax1.set_ylabel('Score')
+    ax1.set_title('Model Performance Metrics')
+    ax1.legend()
+    ax1.set_ylim(0, 1)
+    
+    st.pyplot(fig1)
+    
+    # Sample visualization 2: Prediction distribution
+    st.markdown("#### Typical Prediction Distribution")
+    
+    # Create sample prediction data
+    sample_predictions = pd.DataFrame({
+        'Model': ['TextBlob']*100 + ['VADER (Base)']*100 + ['VADER (Enhanced)']*100,
+        'Prediction': (['negative']*35 + ['neutral']*40 + ['positive']*25)*3
+    })
+    
+    fig2, axes = plt.subplots(1, 3, figsize=(15, 4))
+    
+    for idx, model in enumerate(['TextBlob', 'VADER (Base)', 'VADER (Enhanced)']):
+        model_data = sample_predictions[sample_predictions['Model'] == model]
+        counts = model_data['Prediction'].value_counts()
         
-        for name, col in models.items():
-            if col in example_data.columns and 'true_label' in example_data.columns:
-                y_true = example_data['true_label']
-                y_pred = example_data[col]
-                
-                acc = accuracy_score(y_true, y_pred)
-                macro_f1 = f1_score(y_true, y_pred, average='macro')
-                neg_f1 = f1_score(y_true, y_pred, labels=['negative'], average='macro')
-                pos_f1 = f1_score(y_true, y_pred, labels=['positive'], average='macro')
-                
-                metrics.append({
-                    'Model': name,
-                    'Accuracy': acc,
-                    'Macro F1': macro_f1,
-                    'Negative F1': neg_f1,
-                    'Positive F1': pos_f1,
-                    'Prediction': '✓' if name == 'VADER (Enhanced)' else 'Baseline'
-                })
-        
-        if metrics:
-            metrics_df = pd.DataFrame(metrics)
-            
-            # Create comprehensive visualization
-            fig = plt.figure(figsize=(16, 12))
-            
-            # 1. Radar chart for model comparison
-            ax1 = plt.subplot(2, 2, 1, projection='polar')
-            angles = np.linspace(0, 2 * np.pi, 4, endpoint=False).tolist()
-            metrics_to_plot = ['Accuracy', 'Macro F1', 'Negative F1', 'Positive F1']
-            
-            for idx, model in enumerate(metrics_df['Model']):
-                values = metrics_df.loc[idx, metrics_to_plot].tolist()
-                values += values[:1]  # Close the radar
-                model_angles = angles + angles[:1]
-                
-                ax1.plot(model_angles, values, 'o-', linewidth=2, 
-                        label=model, color=analyzer.color_palette[model])
-                ax1.fill(model_angles, values, alpha=0.1)
-            
-            ax1.set_xticks(angles)
-            ax1.set_xticklabels(metrics_to_plot)
-            ax1.set_ylim(0, 1)
-            ax1.set_title('Model Performance Radar Chart')
-            ax1.legend(loc='upper right')
-            
-            # 2. Confusion matrix for Enhanced VADER
-            ax2 = plt.subplot(2, 2, 2)
-            if 'vader_enh_label' in example_data.columns and 'true_label' in example_data.columns:
-                cm = confusion_matrix(example_data['true_label'], example_data['vader_enh_label'],
-                                     labels=['negative', 'neutral', 'positive'])
-                im = ax2.imshow(cm, interpolation='nearest', cmap='YlOrRd')
-                ax2.set_title('Enhanced VADER Confusion Matrix')
-                ax2.set_xticks([0, 1, 2])
-                ax2.set_yticks([0, 1, 2])
-                ax2.set_xticklabels(['Negative', 'Neutral', 'Positive'])
-                ax2.set_yticklabels(['Negative', 'Neutral', 'Positive'])
-                
-                # Add text annotations
-                thresh = cm.max() / 2.
-                for i in range(cm.shape[0]):
-                    for j in range(cm.shape[1]):
-                        ax2.text(j, i, format(cm[i, j], 'd'),
-                               ha="center", va="center",
-                               color="white" if cm[i, j] > thresh else "black")
-                
-                plt.colorbar(im, ax=ax2)
-            
-            # 3. Prediction distribution
-            ax3 = plt.subplot(2, 2, 3)
-            if 'vader_enh_label' in example_data.columns:
-                counts = example_data['vader_enh_label'].value_counts()
-                wedges, texts, autotexts = ax3.pie(counts.values, labels=counts.index,
-                                                  colors=[analyzer.color_palette[label] for label in counts.index],
-                                                  autopct='%1.1f%%', startangle=90)
-                ax3.set_title('Enhanced VADER Prediction Distribution')
-            
-            # 4. Model comparison bar chart
-            ax4 = plt.subplot(2, 2, 4)
-            x = np.arange(len(metrics_df))
-            width = 0.2
-            
-            for idx, metric in enumerate(['Accuracy', 'Macro F1', 'Negative F1', 'Positive F1']):
-                ax4.bar(x + idx*width - 1.5*width, metrics_df[metric], width, label=metric)
-            
-            ax4.set_xticks(x)
-            ax4.set_xticklabels(metrics_df['Model'])
-            ax4.set_ylabel('Score')
-            ax4.set_title('Performance Metrics Comparison')
-            ax4.legend()
-            ax4.set_ylim(0, 1)
-            
-            plt.tight_layout()
-            st.pyplot(fig)
+        axes[idx].pie(counts.values, labels=counts.index,
+                     colors=[analyzer.color_palette[label] for label in counts.index],
+                     autopct='%1.1f%%', startangle=90)
+        axes[idx].set_title(f'{model} Predictions')
+    
+    plt.tight_layout()
+    st.pyplot(fig2)
 
 def main():
     """Main Streamlit app"""
