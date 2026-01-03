@@ -447,18 +447,28 @@ class EnhancedVADERPipeline:
         # Your actual expanded lexicon from the pipeline
         self._load_enhanced_lexicon()
         
-        # Color palette for visualizations - FIXED: Consistent naming
-        self.color_palette = {
-            "TextBlob": "#EF476F",        # Red
-            "VADER (Base)": "#118AB2",    # Blue
-            "VADER (Enhanced)": "#06D6A0", # Green
-            "negative": "#EF476F",         # Red
-            "neutral": "#FFD166",          # Yellow
-            "positive": "#06D6A0",         # Green
-            "Accuracy": "#4ECDC4",         # Teal
-            "Macro F1": "#FF6B6B",         # Coral
-            "Negative F1": "#95E1D3",      # Light Teal
-            "Positive F1": "#FFD166"       # Yellow
+        # UNIFIED COLOR SCHEME - ONE COLOR PER METRIC, APPLIED CONSISTENTLY
+        self.color_scheme = {
+            # Model colors (for when we need to differentiate models)
+            "models": {
+                "TextBlob": "#EF476F",        # Red
+                "VADER (Base)": "#118AB2",    # Blue
+                "VADER (Enhanced)": "#06D6A0" # Green
+            },
+            # Metric colors (for performance metrics - ONE COLOR PER METRIC)
+            "metrics": {
+                "Accuracy": "#4ECDC4",         # Teal - Always for Accuracy
+                "Macro F1": "#FF6B6B",         # Coral - Always for Macro F1
+                "Negative F1": "#95E1D3",      # Light Teal - Always for Negative F1
+                "Positive F1": "#FFD166",      # Yellow - Always for Positive F1
+                "F1 Score": "#FF9A76"          # Orange - General F1 if needed
+            },
+            # Sentiment colors
+            "sentiments": {
+                "negative": "#EF476F",
+                "neutral": "#FFD166",
+                "positive": "#06D6A0"
+            }
         }
         
         # Model names mapping for consistent display
@@ -694,14 +704,6 @@ class EnhancedVADERPipeline:
             })
         
         return result
-    
-    def get_consistent_model_colors(self):
-        """Return consistent color mapping for models - FIXED VERSION"""
-        return {
-            "TextBlob": self.color_palette["TextBlob"],
-            "VADER (Base)": self.color_palette["VADER (Base)"],
-            "VADER (Enhanced)": self.color_palette["VADER (Enhanced)"]
-        }
 
 # ==========================
 # CREATE PROPER STREAMLIT COMPONENTS INSTEAD OF RAW HTML
@@ -723,94 +725,125 @@ def create_wow_header():
     with col4:
         st.markdown('<div class="badge badge-red clear-text">🔬 Explainable AI</div>', unsafe_allow_html=True)
 
-def create_model_legend(analyzer):
-    """Create a clear model comparison legend"""
-    st.markdown("### 🎨 Model Color Legend")
+def create_unified_legend(analyzer, chart_type="performance"):
+    """Create a unified legend system based on chart type"""
     
-    with st.container():
-        st.markdown('<div class="legend-container">', unsafe_allow_html=True)
+    if chart_type == "performance":
+        # For performance charts: Show metrics with their fixed colors
+        st.markdown("### 📊 Performance Metric Legend")
         
-        # Title
-        st.markdown('<div class="legend-title">Model Identification</div>', unsafe_allow_html=True)
-        
-        # Get consistent colors - FIXED: Use correct model names
-        model_colors = analyzer.get_consistent_model_colors()
-        
-        # Create legend items
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown(f"""
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: {model_colors['TextBlob']};"></div>
-                <span><strong>TextBlob</strong> - Baseline Model</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"""
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: {model_colors['VADER (Base)']};"></div>
-                <span><strong>VADER (Base)</strong> - Standard Version</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown(f"""
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: {model_colors['VADER (Enhanced)']};"></div>
-                <span><strong>VADER (Enhanced)</strong> - Our Improved Version</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-
-def create_metric_legend():
-    """Create a clear metric comparison legend"""
-    st.markdown("### 📊 Metric Color Legend")
+        with st.container():
+            st.markdown('<div class="legend-container">', unsafe_allow_html=True)
+            
+            # Title
+            st.markdown('<div class="legend-title">Metric Color Coding</div>', unsafe_allow_html=True)
+            
+            # Create legend items for each metric
+            metrics = analyzer.color_scheme["metrics"]
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                for metric_name, color in list(metrics.items())[:2]:
+                    st.markdown(f"""
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: {color};"></div>
+                        <span><strong>{metric_name}</strong></span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with col2:
+                for metric_name, color in list(metrics.items())[2:]:
+                    st.markdown(f"""
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: {color};"></div>
+                        <span><strong>{metric_name}</strong></span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
     
-    with st.container():
-        st.markdown('<div class="legend-container">', unsafe_allow_html=True)
+    elif chart_type == "model_comparison":
+        # For model comparison charts: Show models with their colors
+        st.markdown("### 🤖 Model Comparison Legend")
         
-        # Title
-        st.markdown('<div class="legend-title">Performance Metrics</div>', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="legend-container">', unsafe_allow_html=True)
+            
+            # Title
+            st.markdown('<div class="legend-title">Model Identification</div>', unsafe_allow_html=True)
+            
+            # Create legend items for each model
+            models = analyzer.color_scheme["models"]
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown(f"""
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: {models['TextBlob']};"></div>
+                    <span><strong>TextBlob</strong><br>Baseline Model</span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"""
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: {models['VADER (Base)']};"></div>
+                    <span><strong>VADER (Base)</strong><br>Standard Version</span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown(f"""
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: {models['VADER (Enhanced)']};"></div>
+                    <span><strong>VADER (Enhanced)</strong><br>Improved Version</span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    elif chart_type == "sentiment":
+        # For sentiment charts: Show sentiment colors
+        st.markdown("### 😊 Sentiment Analysis Legend")
         
-        # Create legend items
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.markdown(f"""
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #4ECDC4;"></div>
-                <span><strong>Accuracy</strong> - Overall correctness</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"""
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #FF6B6B;"></div>
-                <span><strong>Macro F1</strong> - Average F1 score</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown(f"""
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #95E1D3;"></div>
-                <span><strong>Negative F1</strong> - F1 for negative class</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col4:
-            st.markdown(f"""
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #FFD166;"></div>
-                <span><strong>Positive F1</strong> - F1 for positive class</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="legend-container">', unsafe_allow_html=True)
+            
+            # Title
+            st.markdown('<div class="legend-title">Sentiment Color Coding</div>', unsafe_allow_html=True)
+            
+            # Create legend items for each sentiment
+            sentiments = analyzer.color_scheme["sentiments"]
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown(f"""
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: {sentiments['negative']};"></div>
+                    <span><strong>Negative</strong><br>Score ≤ -0.05</span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"""
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: {sentiments['neutral']};"></div>
+                    <span><strong>Neutral</strong><br>-0.05 < Score < 0.30</span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown(f"""
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: {sentiments['positive']};"></div>
+                    <span><strong>Positive</strong><br>Score ≥ 0.30</span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
 
 def create_sentence_breakdown(sentence_details, analyzer):
     """Create interactive sentence breakdown using Streamlit components"""
@@ -818,6 +851,9 @@ def create_sentence_breakdown(sentence_details, analyzer):
         score = sent['compound']
         weight = sent['weight']
         sentiment = "positive" if score > 0.05 else "negative" if score < -0.05 else "neutral"
+        
+        # Get sentiment color
+        sentiment_color = analyzer.color_scheme["sentiments"][sentiment]
         
         # Determine CSS class based on sentiment
         card_class = f"sentence-card {sentiment}"
@@ -831,7 +867,8 @@ def create_sentence_breakdown(sentence_details, analyzer):
             with col1:
                 st.write(f"**Sentence {i}:** {sent['sentence']}")
             with col2:
-                st.markdown(f"""<span class="badge badge-{'red' if sentiment == 'negative' else 'green' if sentiment == 'positive' else 'yellow'}">{sentiment.upper()}</span>""", unsafe_allow_html=True)
+                badge_color = "red" if sentiment == "negative" else "green" if sentiment == "positive" else "yellow"
+                st.markdown(f"""<span class="badge badge-{badge_color}">{sentiment.upper()}</span>""", unsafe_allow_html=True)
             
             # Score and weight
             col_score, col_weight = st.columns(2)
@@ -971,7 +1008,7 @@ def create_single_analysis_tab(analyzer):
                     with st.container():
                         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                         st.markdown("### 📊 TextBlob")
-                        st.markdown(f"<h1 style='color: {analyzer.color_palette['TextBlob']}; font-size: 3rem; text-align: center;'>{result['TextBlob'].upper()}</h1>", unsafe_allow_html=True)
+                        st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['TextBlob']}; font-size: 3rem; text-align: center;'>{result['TextBlob'].upper()}</h1>", unsafe_allow_html=True)
                         st.write("**Prediction**")
                         st.write(f"**📈 Score:** {result['textblob_score']:.3f}")
                         st.write(f"**🎯 Class:** {result['TextBlob'].capitalize()}")
@@ -983,7 +1020,7 @@ def create_single_analysis_tab(analyzer):
                     with st.container():
                         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                         st.markdown("### 📊 VADER (Base)")
-                        st.markdown(f"<h1 style='color: {analyzer.color_palette['VADER (Base)']}; font-size: 3rem; text-align: center;'>{result['VADER_Base'].upper()}</h1>", unsafe_allow_html=True)
+                        st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['VADER (Base)']}; font-size: 3rem; text-align: center;'>{result['VADER_Base'].upper()}</h1>", unsafe_allow_html=True)
                         st.write("**Prediction**")
                         st.write(f"**📈 Score:** {result['vader_base_score']:.3f}")
                         st.write(f"**🎯 Class:** {result['VADER_Base'].capitalize()}")
@@ -1008,8 +1045,8 @@ def create_single_analysis_tab(analyzer):
                 # BEST MODEL DECLARATION
                 st.success("🏆 **ENHANCED VADER SELECTED AS BEST MODEL** - Based on superior accuracy (55.6% vs 54.0% Base VADER) and advanced features")
                 
-                # Add model legend
-                create_model_legend(analyzer)
+                # Add model comparison legend
+                create_unified_legend(analyzer, chart_type="model_comparison")
                 
                 # REAL-TIME EXPLAINABILITY SECTION
                 st.markdown("## 🔬 **Real-Time Enhanced VADER Explainability**")
@@ -1044,20 +1081,25 @@ def create_single_analysis_tab(analyzer):
                         """)
                     
                     with col2:
-                        # Performance comparison chart - FIXED: Using correct model names
+                        # Simple accuracy comparison chart
                         models_chart = ["TextBlob", "VADER (Base)", "VADER (Enhanced)"]
                         accuracy_values = [0.502, 0.540, 0.556]
+                        
+                        # Get model colors
+                        model_colors = analyzer.color_scheme["models"]
                         
                         fig = go.Figure(data=[
                             go.Bar(
                                 x=models_chart, 
                                 y=accuracy_values,
                                 marker_color=[
-                                    analyzer.color_palette["TextBlob"],
-                                    analyzer.color_palette["VADER (Base)"],
-                                    analyzer.color_palette["VADER (Enhanced)"]
+                                    model_colors["TextBlob"],
+                                    model_colors["VADER (Base)"],
+                                    model_colors["VADER (Enhanced)"]
                                 ],
-                                hovertemplate='<b>%{x}</b><br>Accuracy: %{y:.3f}<extra></extra>'
+                                hovertemplate='<b>%{x}</b><br>Accuracy: %{y:.3f}<extra></extra>',
+                                text=[f'{val:.1%}' for val in accuracy_values],
+                                textposition='auto'
                             )
                         ])
                         
@@ -1222,26 +1264,26 @@ def create_single_analysis_tab(analyzer):
                             - Is {final_score:.3f} ≤ {analyzer.thresholds['neg_thr']}? **{final_score <= analyzer.thresholds['neg_thr']}**
                             """)
                 
-                # UPDATED: PERFORMANCE METRICS VISUALIZATIONS WITH HARMONIZED LEGENDS
+                # UPDATED: PERFORMANCE METRICS VISUALIZATIONS WITH UNIFIED LEGENDS
                 st.markdown("## 📊 **Model Performance Comparison**")
                 
-                # Add metric legend
-                create_metric_legend()
+                # Add performance metric legend
+                create_unified_legend(analyzer, chart_type="performance")
                 
-                # Create grouped bar chart for Accuracy and Macro F1 - FIXED: Using correct model names
+                # Create grouped bar chart for Accuracy and Macro F1 - USING METRIC COLORS
                 models_chart = ["TextBlob", "VADER (Base)", "VADER (Enhanced)"]
                 accuracy_scores = [0.502, 0.540, 0.556]
                 macro_f1_scores = [0.471, 0.530, 0.542]
                 
-                # Get consistent model colors
-                model_colors = analyzer.get_consistent_model_colors()
+                # Get metric colors
+                metric_colors = analyzer.color_scheme["metrics"]
                 
                 fig = go.Figure(data=[
                     go.Bar(
                         name='Accuracy',
                         x=models_chart,
                         y=accuracy_scores,
-                        marker_color=[model_colors[model] for model in models_chart],
+                        marker_color=metric_colors["Accuracy"],  # SAME COLOR FOR ALL MODELS
                         text=[f'{acc:.1%}' for acc in accuracy_scores],
                         textposition='auto',
                         hovertemplate='<b>%{x}</b><br>Accuracy: %{y:.3f}<extra></extra>'
@@ -1250,7 +1292,7 @@ def create_single_analysis_tab(analyzer):
                         name='Macro F1',
                         x=models_chart,
                         y=macro_f1_scores,
-                        marker_color=['#F28F9D', '#5AB3D0', '#5AE2BB'],  # Lighter shades of model colors
+                        marker_color=metric_colors["Macro F1"],  # SAME COLOR FOR ALL MODELS
                         text=[f'{f1:.1%}' for f1 in macro_f1_scores],
                         textposition='auto',
                         hovertemplate='<b>%{x}</b><br>Macro F1: %{y:.3f}<extra></extra>'
@@ -1329,7 +1371,8 @@ def create_single_analysis_tab(analyzer):
                     values = perf_df.loc[idx, categories].tolist()
                     values += values[:1]  # Close the radar
                     
-                    # Use consistent model colors
+                    # Use model colors for radar chart (differentiating models)
+                    model_colors = analyzer.color_scheme["models"]
                     line_color = model_colors[model]
                     
                     fig_radar.add_trace(go.Scatterpolar(
@@ -1357,7 +1400,7 @@ def create_single_analysis_tab(analyzer):
                 
                 st.plotly_chart(fig_radar, use_container_width=True)
                 
-                # Stacked bar chart for F1 scores
+                # Stacked bar chart for F1 scores - USING METRIC COLORS
                 st.markdown("### 📊 **F1 Score Breakdown by Model**")
                 
                 fig_f1 = go.Figure(data=[
@@ -1365,7 +1408,7 @@ def create_single_analysis_tab(analyzer):
                         name='Negative F1',
                         x=models_chart,
                         y=[0.349, 0.485, 0.488],
-                        marker_color='#EF476F',
+                        marker_color=metric_colors["Negative F1"],  # SAME COLOR FOR ALL MODELS
                         text=[f'{val:.1%}' for val in [0.349, 0.485, 0.488]],
                         textposition='auto',
                         hovertemplate='<b>%{x}</b><br>Negative F1: %{y:.3f}<extra></extra>'
@@ -1374,7 +1417,7 @@ def create_single_analysis_tab(analyzer):
                         name='Positive F1',
                         x=models_chart,
                         y=[0.512, 0.543, 0.561],
-                        marker_color='#06D6A0',
+                        marker_color=metric_colors["Positive F1"],  # SAME COLOR FOR ALL MODELS
                         text=[f'{val:.1%}' for val in [0.512, 0.543, 0.561]],
                         textposition='auto',
                         hovertemplate='<b>%{x}</b><br>Positive F1: %{y:.3f}<extra></extra>'
@@ -1409,7 +1452,7 @@ def create_single_analysis_tab(analyzer):
                 fig_pie = go.Figure(data=[go.Pie(
                     labels=list(set(predictions)),
                     values=[predictions.count(p) for p in set(predictions)],
-                    marker_colors=[analyzer.color_palette[p] for p in set(predictions)],
+                    marker_colors=[analyzer.color_scheme["sentiments"][p] for p in set(predictions)],
                     hole=.4,
                     textinfo='label+percent',
                     hoverinfo='label+value+percent',
@@ -1496,7 +1539,7 @@ def create_batch_analysis_tab(analyzer):
                         with st.container():
                             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                             st.markdown("### Enhanced VADER")
-                            st.markdown(f"<h1 style='color: {analyzer.color_palette['VADER (Enhanced)']}; font-size: 2.5rem; text-align: center;'>{len(results_df)}</h1>", unsafe_allow_html=True)
+                            st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['VADER (Enhanced)']}; font-size: 2.5rem; text-align: center;'>{len(results_df)}</h1>", unsafe_allow_html=True)
                             st.write("**Total Texts**")
                             st.write(f"**📈 Positive:** {enhanced_counts.get('positive', 0)}")
                             st.write(f"**📉 Negative:** {enhanced_counts.get('negative', 0)}")
@@ -1508,7 +1551,7 @@ def create_batch_analysis_tab(analyzer):
                         with st.container():
                             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                             st.markdown("### TextBlob")
-                            st.markdown(f"<h1 style='color: {analyzer.color_palette['TextBlob']}; font-size: 2.5rem; text-align: center;'>{len(results_df)}</h1>", unsafe_allow_html=True)
+                            st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['TextBlob']}; font-size: 2.5rem; text-align: center;'>{len(results_df)}</h1>", unsafe_allow_html=True)
                             st.write("**Total Texts**")
                             st.write(f"**📈 Positive:** {textblob_counts.get('positive', 0)}")
                             st.write(f"**📉 Negative:** {textblob_counts.get('negative', 0)}")
@@ -1520,7 +1563,7 @@ def create_batch_analysis_tab(analyzer):
                         with st.container():
                             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                             st.markdown("### VADER Base")
-                            st.markdown(f"<h1 style='color: {analyzer.color_palette['VADER (Base)']}; font-size: 2.5rem; text-align: center;'>{len(results_df)}</h1>", unsafe_allow_html=True)
+                            st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['VADER (Base)']}; font-size: 2.5rem; text-align: center;'>{len(results_df)}</h1>", unsafe_allow_html=True)
                             st.write("**Total Texts**")
                             st.write(f"**📈 Positive:** {vader_counts.get('positive', 0)}")
                             st.write(f"**📉 Negative:** {vader_counts.get('negative', 0)}")
@@ -1559,6 +1602,9 @@ def create_batch_analysis_tab(analyzer):
                     # Visualizations
                     st.markdown("## 📈 **Batch Analysis Visualizations**")
                     
+                    # Add model comparison legend
+                    create_unified_legend(analyzer, chart_type="model_comparison")
+                    
                     # Create tabs for different visualizations
                     viz_tab1, viz_tab2 = st.tabs(["📊 Distribution", "🤝 Agreement"])
                     
@@ -1566,9 +1612,9 @@ def create_batch_analysis_tab(analyzer):
                         fig = go.Figure()
                         
                         for model, col, color in [
-                            ("TextBlob", "TextBlob", analyzer.color_palette["TextBlob"]),
-                            ("Base VADER", "VADER_Base", analyzer.color_palette["VADER (Base)"]),
-                            ("Enhanced VADER", "VADER_Enhanced", analyzer.color_palette["VADER (Enhanced)"])
+                            ("TextBlob", "TextBlob", analyzer.color_scheme["models"]["TextBlob"]),
+                            ("Base VADER", "VADER_Base", analyzer.color_scheme["models"]["VADER (Base)"]),
+                            ("Enhanced VADER", "VADER_Enhanced", analyzer.color_scheme["models"]["VADER (Enhanced)"])
                         ]:
                             counts = results_df[col].value_counts()
                             fig.add_trace(go.Bar(
@@ -1604,11 +1650,11 @@ def create_performance_tab(analyzer):
     st.markdown("## 📈 Performance Metrics")
     st.markdown("---")
     
-    # Add model legend
-    create_model_legend(analyzer)
+    # Add model comparison legend
+    create_unified_legend(analyzer, chart_type="model_comparison")
     
-    # Add metric legend
-    create_metric_legend()
+    # Add performance metric legend
+    create_unified_legend(analyzer, chart_type="performance")
     
     # Actual results from your pipeline
     performance_data = {
@@ -1647,8 +1693,8 @@ def create_performance_tab(analyzer):
         values = perf_df.loc[idx, categories].tolist()
         values += values[:1]  # Close the radar
         
-        # Use consistent model colors
-        model_colors = analyzer.get_consistent_model_colors()
+        # Use model colors for radar chart (differentiating models)
+        model_colors = analyzer.color_scheme["models"]
         line_color = model_colors[model]
         
         fig.add_trace(go.Scatterpolar(
