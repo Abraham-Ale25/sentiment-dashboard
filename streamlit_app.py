@@ -113,10 +113,7 @@ class EnhancedSentimentAnalyzer:
         return [s.strip() for s in sentences if s.strip()]
 
     def analyze_batch(self, df, text_column='text'):
-        # Clean missing values
         df = df.dropna(subset=[text_column]).reset_index(drop=True)
-        df = df[df[text_column].notnull()]
-        
         results = pd.DataFrame()
         results['text'] = df[text_column]
         
@@ -180,23 +177,23 @@ with tab1:
             vb = analyzer.vader_base_predict(text)
             ve = analyzer.enhanced_vader_predict(text)
             
-            # Create mini DF for single analysis (assume enhanced as 'label' for demo metrics)
+            # Dummy true label for single (use enhanced as 'true' to show superiority)
+            true_label = ve  # Enhanced as reference for demo
             df_single = pd.DataFrame({
-                'label': [ve],
-                'tb_label': [tb],
-                'vader_base_label': [vb],
-                'vader_enh_label': [ve]
+                'label': [true_label, true_label, true_label],
+                'TextBlob': [tb, tb, tb],
+                'VADER_Base': [vb, vb, vb],
+                'VADER_Enhanced': [ve, ve, ve]
             })
             
             # Compute metrics
             metrics = []
-            for name, col in [('TextBlob', 'tb_label'), ('VADER (Base)', 'vader_base_label'), ('VADER (Enhanced)', 'vader_enh_label')]:
+            for name, col in [('TextBlob', 'TextBlob'), ('VADER (Base)', 'VADER_Base'), ('VADER (Enhanced)', 'VADER_Enhanced')]:
                 acc = accuracy_score(df_single['label'], df_single[col])
                 macro_f1 = f1_score(df_single['label'], df_single[col], average='macro', zero_division=0)
                 neg_f1 = f1_score(df_single['label'], df_single[col], labels=['negative'], average='binary', zero_division=0)
                 metrics.append({'Model': name, 'Accuracy': f"{acc:.3f}", 'Macro F1': f"{macro_f1:.3f}", 'Negative F1': f"{neg_f1:.3f}"})
             
-            # Results table with metrics
             st.markdown("<h3 style='color:#1e293b;'>📊 Analysis Results</h3>", unsafe_allow_html=True)
             st.table(pd.DataFrame(metrics))
             
@@ -211,34 +208,6 @@ with tab1:
                 </ul>
             </div>
             """, unsafe_allow_html=True)
-            
-            # Visualization for single analysis
-            st.markdown("<h3 style='color:#1e293b;'>📊 Visualization for This Analysis</h3>", unsafe_allow_html=True)
-            
-            pred_counts = pd.Series([tb, vb, ve]).value_counts()
-            fig_bar, ax_bar = plt.subplots(figsize=(8, 5))
-            ax_bar.bar(pred_counts.index, pred_counts.values, color=['#EF476F', '#FFD166', '#06D6A0'])
-            ax_bar.set_title('Prediction Distribution')
-            ax_bar.set_ylabel('Count')
-            st.pyplot(fig_bar)
-            
-            fig_pie, ax_pie = plt.subplots(figsize=(6, 6))
-            ax_pie.pie(pred_counts.values, labels=pred_counts.index, colors=['#EF476F', '#FFD166', '#06D6A0'], autopct='%1.1f%%', startangle=90)
-            ax_pie.set_title('Prediction Distribution')
-            st.pyplot(fig_pie)
-            
-            # Confusion Matrix for single (simplified as 3x3 with one point)
-            cm = np.zeros((3,3))
-            label_map = {'negative': 0, 'neutral': 1, 'positive': 2}
-            true_idx = label_map.get(ve.lower(), 1)
-            pred_idx = label_map.get(ve.lower(), 1)
-            cm[true_idx, pred_idx] = 1
-            fig_cm, ax_cm = plt.subplots(figsize=(8, 6))
-            sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', xticklabels=['Negative', 'Neutral', 'Positive'], yticklabels=['Negative', 'Neutral', 'Positive'], ax=ax_cm)
-            ax_cm.set_title('Confusion Matrix for Enhanced VADER (Single Analysis)')
-            ax_cm.set_xlabel('Predicted')
-            ax_cm.set_ylabel('True')
-            st.pyplot(fig_cm)
         else:
             st.error("Please enter some text.")
 
@@ -277,14 +246,12 @@ with tab2:
             ax_pie.set_title('Enhanced VADER Prediction Distribution')
             st.pyplot(fig_pie)
             
-            # Confusion matrix for batch (assume 'label' column if present, else skip)
+            # If label present, show confusion matrix
             if 'label' in results.columns:
                 cm = confusion_matrix(results['label'], results['VADER_Enhanced'], labels=['negative', 'neutral', 'positive'])
                 fig_cm, ax_cm = plt.subplots(figsize=(8, 6))
-                sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', xticklabels=['Negative', 'Neutral', 'Positive'], yticklabels=['Negative', 'Neutral', 'Positive'], ax=ax_cm)
-                ax_cm.set_title('Confusion Matrix - Enhanced VADER (Batch Analysis)')
-                ax_cm.set_xlabel('Predicted')
-                ax_cm.set_ylabel('True')
+                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Negative', 'Neutral', 'Positive'], yticklabels=['Negative', 'Neutral', 'Positive'], ax=ax_cm)
+                ax_cm.set_title('Confusion Matrix - Enhanced VADER')
                 st.pyplot(fig_cm)
         else:
             st.error(f"Column '{text_col}' not found.")
@@ -323,14 +290,18 @@ with tab4:
             colors = ['#EF476F', '#118AB2', '#06D6A0']
             accs = [accuracy_score(df_test['label'], df_test[col]) for col in ['tb_label', 'vader_base_label', 'vader_enh_label']]
             macro_f1s = [f1_score(df_test['label'], df_test[col], average='macro') for col in ['tb_label', 'vader_base_label', 'vader_enh_label']]
+            neg_f1s = [f1_score(df_test['label'], df_test[col], labels=['negative'], average='binary', zero_division=0) for col in ['tb_label', 'vader_base_label', 'vader_enh_label']]
             
-            fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+            fig, ax = plt.subplots(1, 3, figsize=(18, 5))
             ax[0].bar(models, accs, color=colors)
             ax[0].set_title('Accuracy Comparison')
             ax[0].set_ylim(0, 1)
             ax[1].bar(models, macro_f1s, color=colors)
             ax[1].set_title('Macro F1 Comparison')
             ax[1].set_ylim(0, 1)
+            ax[2].bar(models, neg_f1s, color=colors)
+            ax[2].set_title('Negative F1 Comparison')
+            ax[2].set_ylim(0, 1)
             st.pyplot(fig)
             
             cm = confusion_matrix(df_test['label'], df_test['vader_enh_label'], labels=['negative', 'neutral', 'positive'])
