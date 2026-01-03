@@ -24,23 +24,27 @@ st.set_page_config(
 )
 
 # ==========================
-# CUSTOM CSS FOR STUNNING UI
+# CUSTOM CSS FOR STUNNING UI - FIXED VERSION
 # ==========================
 st.markdown("""
 <style>
-    /* Main background */
+    /* Main background - fixed positioning */
     .stApp {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding-top: 0 !important;
     }
     
-    /* Custom container */
+    /* Fix main container to avoid overlap */
     .main-container {
         background: rgba(255, 255, 255, 0.95);
         border-radius: 20px;
         padding: 30px;
-        margin: 20px 0;
+        margin: 20px auto;
         box-shadow: 0 20px 40px rgba(0,0,0,0.1);
         backdrop-filter: blur(10px);
+        position: relative;
+        z-index: 1;
+        max-width: 95%;
     }
     
     /* Enhanced headers */
@@ -53,6 +57,8 @@ st.markdown("""
         text-align: center;
         margin-bottom: 0.5rem !important;
         text-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        padding-top: 0 !important;
+        margin-top: 0 !important;
     }
     
     .sub-title {
@@ -61,6 +67,19 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem !important;
         font-weight: 300 !important;
+    }
+    
+    /* Fix Streamlit's default spacing issues */
+    .stApp header {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+    
+    /* Fix tab container positioning */
+    .stTabs {
+        margin-top: 20px !important;
+        position: relative;
+        z-index: 2;
     }
     
     /* Enhanced metric cards */
@@ -73,6 +92,8 @@ st.markdown("""
         border: 2px solid transparent;
         transition: all 0.3s ease;
         height: 100%;
+        position: relative;
+        z-index: 1;
     }
     
     .metric-card:hover {
@@ -92,12 +113,121 @@ st.markdown("""
         border: 3px solid #04b586;
         animation: pulse 2s infinite;
         height: 100%;
+        position: relative;
+        z-index: 1;
     }
     
     @keyframes pulse {
         0% { box-shadow: 0 0 0 0 rgba(6, 214, 160, 0.4); }
         70% { box-shadow: 0 0 0 15px rgba(6, 214, 160, 0); }
         100% { box-shadow: 0 0 0 0 rgba(6, 214, 160, 0); }
+    }
+    
+    /* Fix button container */
+    .stButton {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* Fix text area container */
+    .stTextArea {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* Fix column spacing */
+    .stColumn {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* Fix the header area specifically */
+    div[data-testid="stHeader"] {
+        background: transparent !important;
+        height: auto !important;
+        padding: 0 !important;
+    }
+    
+    /* Remove default Streamlit padding */
+    .css-18e3th9 {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Fix the main block container */
+    .block-container {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Fix badge positioning */
+    .badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin: 2px;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .badge-green { background: #06D6A0; color: white; }
+    .badge-blue { background: #118AB2; color: white; }
+    .badge-red { background: #EF476F; color: white; }
+    .badge-yellow { background: #FFD166; color: #333; }
+    .badge-purple { background: #764ba2; color: white; }
+    
+    /* Fix progress bar */
+    .stProgress {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* Fix expander */
+    .streamlit-expanderHeader {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* Fix plotly charts container */
+    .js-plotly-plot {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* Fix data frame container */
+    .stDataFrame {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* Fix the tabs content area */
+    .stTabs [data-baseweb="tab-panel"] {
+        position: relative;
+        z-index: 1;
+        padding-top: 20px !important;
+    }
+    
+    /* Additional fixes for Streamlit Cloud */
+    .css-1vq4p4l {
+        padding-top: 0 !important;
+    }
+    
+    .css-1v0mbdj {
+        margin-top: 0 !important;
+    }
+    
+    /* Ensure content is above background */
+    .element-container {
+        position: relative;
+        z-index: 2;
+    }
+    
+    /* Fix the app container height */
+    #root > .stApp {
+        min-height: 100vh;
+        overflow: visible !important;
     }
     
     /* Tab styling */
@@ -145,30 +275,6 @@ st.markdown("""
         transform: translateY(-3px);
         box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4) !important;
     }
-    
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
-        color: white !important;
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Badge styling */
-    .badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        margin: 2px;
-    }
-    
-    .badge-green { background: #06D6A0; color: white; }
-    .badge-blue { background: #118AB2; color: white; }
-    .badge-red { background: #EF476F; color: white; }
-    .badge-yellow { background: #FFD166; color: #333; }
-    .badge-purple { background: #764ba2; color: white; }
     
     /* Progress bar */
     .stProgress > div > div > div > div {
@@ -466,39 +572,45 @@ class EnhancedVADERPipeline:
         return result
 
 # ==========================
-# WOW HEADER SECTION
+# WOW HEADER SECTION - FIXED VERSION
 # ==========================
 def create_wow_header():
-    """Create stunning header with animations"""
-    col1, col2, col3 = st.columns([1, 2, 1])
+    """Create stunning header with animations - FIXED VERSION"""
+    # Create a clean header without complex HTML that might conflict
+    st.markdown("""
+    <div style='text-align: center; margin-top: 0; padding-top: 0;'>
+        <h1 style='font-size: 3.5rem; font-weight: 800; 
+                   background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+                   -webkit-background-clip: text;
+                   -webkit-text-fill-color: transparent;
+                   margin: 0 0 0.5rem 0;'>
+            🚀 ENHANCED VADER
+        </h1>
+        <h2 style='font-size: 1.2rem; color: #666; margin: 0 0 1rem 0; font-weight: 300;'>
+            Advanced Multi-Domain Sentiment Analysis
+        </h2>
+    </div>
+    """, unsafe_allow_html=True)
     
+    # Create badges using Streamlit columns instead of HTML
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown('<div class="badge badge-purple">🏆 Best Model: Enhanced VADER</div>', unsafe_allow_html=True)
     with col2:
-        st.markdown("""
-        <div style='text-align: center;'>
-            <h1 class='main-title'>🚀 ENHANCED VADER</h1>
-            <h2 class='sub-title'>Advanced Multi-Domain Sentiment Analysis</h2>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Animated badges
-        st.markdown("""
-        <div style='text-align: center; margin-bottom: 30px;'>
-            <span class='badge badge-purple'>🏆 Best Model: Enhanced VADER</span>
-            <span class='badge badge-green'>🎯 55.6% Accuracy</span>
-            <span class='badge badge-blue'>⚡ Real-Time Analysis</span>
-            <span class='badge badge-red'>🔬 Explainable AI</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="badge badge-green">🎯 55.6% Accuracy</div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown('<div class="badge badge-blue">⚡ Real-Time Analysis</div>', unsafe_allow_html=True)
+    with col4:
+        st.markdown('<div class="badge badge-red">🔬 Explainable AI</div>', unsafe_allow_html=True)
 
 # ==========================
 # SINGLE ANALYSIS TAB
 # ==========================
 def create_single_analysis_tab(analyzer):
     """Single text analysis tab with WOW factor"""
-    st.markdown("""
-    <div class='main-container'>
-        <h2 style='color: #333; margin-bottom: 30px;'>🔍 Live Sentiment Analysis</h2>
-    """, unsafe_allow_html=True)
+    # Use Streamlit's native markdown instead of complex HTML containers
+    st.markdown("## 🔍 Live Sentiment Analysis")
+    st.markdown("---")
     
     # Example texts with emojis
     examples = {
@@ -768,10 +880,8 @@ def create_single_analysis_tab(analyzer):
 # ==========================
 def create_batch_analysis_tab(analyzer):
     """Batch file analysis tab"""
-    st.markdown("""
-    <div class='main-container'>
-        <h2 style='color: #333; margin-bottom: 30px;'>📊 Batch File Analysis</h2>
-    """, unsafe_allow_html=True)
+    st.markdown("## 📊 Batch File Analysis")
+    st.markdown("---")
     
     uploaded_file = st.file_uploader(
         "**Upload your CSV or TXT file**",
@@ -961,10 +1071,8 @@ def create_batch_analysis_tab(analyzer):
 # ==========================
 def create_performance_tab(analyzer):
     """Performance comparison tab"""
-    st.markdown("""
-    <div class='main-container'>
-        <h2 style='color: #333; margin-bottom: 30px;'>📈 Performance Metrics</h2>
-    """, unsafe_allow_html=True)
+    st.markdown("## 📈 Performance Metrics")
+    st.markdown("---")
     
     # Actual results from your pipeline
     performance_data = {
@@ -1064,10 +1172,8 @@ def create_performance_tab(analyzer):
 # ==========================
 def create_visualizations_tab(analyzer):
     """Advanced visualizations tab"""
-    st.markdown("""
-    <div class='main-container'>
-        <h2 style='color: #333; margin-bottom: 30px;'>🎨 Advanced Visualizations</h2>
-    """, unsafe_allow_html=True)
+    st.markdown("## 🎨 Advanced Visualizations")
+    st.markdown("---")
     
     # Three Enhancement Visualization
     st.markdown("### 🎯 **Three Key Enhancements**")
@@ -1174,7 +1280,7 @@ def create_footer():
     """, unsafe_allow_html=True)
 
 # ==========================
-# MAIN APP
+# MAIN APP - FIXED VERSION
 # ==========================
 def main():
     """Main Streamlit app"""
@@ -1183,6 +1289,9 @@ def main():
     
     # Create wow header
     create_wow_header()
+    
+    # Add some spacing
+    st.markdown("<br>", unsafe_allow_html=True)
     
     # Create tabs
     tab1, tab2, tab3, tab4 = st.tabs([
