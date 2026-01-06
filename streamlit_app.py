@@ -1,52 +1,36 @@
+# streamlit_app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import re
 import time
-import plotly.graph_objects as go
-import plotly.express as px
-from textblob import TextBlob
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report
 from io import StringIO
-import base64
 from datetime import datetime
 
-# Set page config first
+import plotly.graph_objects as go
+from textblob import TextBlob
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 st.set_page_config(
     page_title="Enhanced VADER Sentiment Analysis",
     page_icon="🚀",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-# ==========================
-# CUSTOM CSS FOR STUNNING UI - UPDATED WITH CLEAR BACKGROUNDS
-# ==========================
-st.markdown("""
+# =========================================================
+# CUSTOM CSS (kept from your version)
+# =========================================================
+st.markdown(
+    """
 <style>
-    /* Main background - CLEAN BLUE-GREEN GRADIENT */
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
         padding-top: 0 !important;
     }
-    
-    /* Fix main container - CLEAN WHITE WITH SHADOW */
-    .main-container {
-        background: white !important;
-        border-radius: 20px;
-        padding: 30px;
-        margin: 20px auto;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        position: relative;
-        z-index: 1;
-        max-width: 95%;
-        border: 1px solid #e8e8e8;
-    }
-    
-    /* Enhanced headers - CLEAR AND SHARP */
     .main-title {
         font-size: 3.5rem !important;
         font-weight: 800 !important;
@@ -61,7 +45,6 @@ st.markdown("""
         filter: none !important;
         opacity: 1 !important;
     }
-    
     .sub-title {
         font-size: 1.2rem !important;
         color: #555 !important;
@@ -69,21 +52,6 @@ st.markdown("""
         margin-bottom: 2rem !important;
         font-weight: 400 !important;
     }
-    
-    /* Fix Streamlit's default spacing issues */
-    .stApp header {
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-    }
-    
-    /* Fix tab container positioning */
-    .stTabs {
-        margin-top: 20px !important;
-        position: relative;
-        z-index: 2;
-    }
-    
-    /* Enhanced metric cards - CLEAN DESIGN */
     .metric-card {
         background: white !important;
         border-radius: 15px;
@@ -96,14 +64,11 @@ st.markdown("""
         position: relative;
         z-index: 1;
     }
-    
     .metric-card:hover {
         transform: translateY(-3px);
         box-shadow: 0 8px 25px rgba(0,0,0,0.12);
         border-color: #06D6A0;
     }
-    
-    /* Best model highlight */
     .best-model-card {
         background: linear-gradient(135deg, #06D6A0 0%, #04b586 100%) !important;
         color: white !important;
@@ -117,98 +82,11 @@ st.markdown("""
         position: relative;
         z-index: 1;
     }
-    
     @keyframes pulse {
         0% { box-shadow: 0 0 0 0 rgba(6, 214, 160, 0.3); }
         70% { box-shadow: 0 0 0 10px rgba(6, 214, 160, 0); }
         100% { box-shadow: 0 0 0 0 rgba(6, 214, 160, 0); }
     }
-    
-    /* Tab styling - CLEAN DESIGN */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: transparent;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: white !important;
-        border-radius: 10px 10px 0 0;
-        padding: 15px 25px;
-        font-weight: 600;
-        border: 2px solid #e8e8e8;
-        margin-right: 5px;
-        transition: all 0.3s ease;
-    }
-    
-    .stTabs [data-baseweb="tab"]:hover {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        transform: translateY(-2px);
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border-color: #667eea;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
-    
-    /* Button styling */
-    .stButton button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 10px !important;
-        padding: 12px 30px !important;
-        font-weight: 600 !important;
-        font-size: 1rem !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    .stButton button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3) !important;
-    }
-    
-    /* Progress bar */
-    .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, #667eea, #764ba2);
-    }
-    
-    /* Text area - CLEAN DESIGN */
-    .stTextArea textarea {
-        border-radius: 10px !important;
-        border: 2px solid #e8e8e8 !important;
-        padding: 15px !important;
-        font-size: 1rem !important;
-        background: white !important;
-    }
-    
-    .stTextArea textarea:focus {
-        border-color: #06D6A0 !important;
-        box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1) !important;
-    }
-    
-    /* Select box - CLEAN DESIGN */
-    .stSelectbox div[data-baseweb="select"] {
-        border-radius: 10px !important;
-        background: white !important;
-    }
-    
-    /* Dataframe styling - CLEAN DESIGN */
-    .stDataFrame {
-        border-radius: 10px !important;
-        overflow: hidden !important;
-        background: white !important;
-        border: 1px solid #e8e8e8 !important;
-    }
-    
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* Custom divider */
     .divider {
         height: 3px;
         background: linear-gradient(90deg, #667eea, #764ba2, #06D6A0);
@@ -216,82 +94,6 @@ st.markdown("""
         margin: 30px 0;
         opacity: 0.8;
     }
-    
-    /* Enhanced VADER analysis cards - CLEAN DESIGN */
-    .explanation-box {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border-radius: 10px !important;
-        padding: 20px !important;
-        margin: 15px 0 !important;
-        border: 2px solid rgba(255,255,255,0.2) !important;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
-    }
-    
-    .decision-box {
-        background: linear-gradient(135deg, #06D6A0 0%, #04b586 100%) !important;
-        color: white !important;
-        border-radius: 10px !important;
-        padding: 20px !important;
-        margin: 15px 0 !important;
-        border: 2px solid rgba(255,255,255,0.2) !important;
-        box-shadow: 0 5px 15px rgba(6, 214, 160, 0.2) !important;
-    }
-    
-    .threshold-box {
-        background: linear-gradient(135deg, #FFD166 0%, #f9c74f 100%) !important;
-        color: #333 !important;
-        border-radius: 10px !important;
-        padding: 15px !important;
-        margin: 10px 0 !important;
-        border: 2px solid rgba(0,0,0,0.1) !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.08) !important;
-    }
-    
-    .sentence-card {
-        background: white !important;
-        border-radius: 10px !important;
-        padding: 15px !important;
-        margin: 10px 0 !important;
-        border-left: 4px solid #06D6A0 !important;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.06) !important;
-        border: 1px solid #f0f0f0 !important;
-    }
-    
-    .sentence-card.negative {
-        border-left-color: #EF476F !important;
-    }
-    
-    .sentence-card.neutral {
-        border-left-color: #FFD166 !important;
-    }
-    
-    .sentence-card.positive {
-        border-left-color: #06D6A0 !important;
-    }
-    
-    /* Score indicator */
-    .score-indicator {
-        width: 100% !important;
-        height: 8px !important;
-        background: linear-gradient(90deg, #EF476F, #FFD166, #06D6A0) !important;
-        border-radius: 4px !important;
-        margin: 10px 0 !important;
-        position: relative !important;
-    }
-    
-    .score-marker {
-        position: absolute !important;
-        top: -4px !important;
-        width: 16px !important;
-        height: 16px !important;
-        background: white !important;
-        border: 2px solid #333 !important;
-        border-radius: 50% !important;
-        transform: translateX(-50%) !important;
-    }
-    
-    /* Badge styling */
     .badge {
         display: inline-block !important;
         padding: 4px 12px !important;
@@ -302,90 +104,31 @@ st.markdown("""
         position: relative !important;
         z-index: 1 !important;
     }
-    
-    .badge-green { 
-        background: linear-gradient(135deg, #06D6A0 0%, #04b586 100%) !important; 
-        color: white !important; 
-        border: 1px solid #04b586 !important;
-    }
-    .badge-blue { 
-        background: linear-gradient(135deg, #118AB2 0%, #0a6d8e 100%) !important; 
-        color: white !important; 
-        border: 1px solid #0a6d8e !important;
-    }
-    .badge-red { 
-        background: linear-gradient(135deg, #EF476F 0%, #e6305a 100%) !important; 
-        color: white !important; 
-        border: 1px solid #e6305a !important;
-    }
-    .badge-yellow { 
-        background: linear-gradient(135deg, #FFD166 0%, #f9c74f 100%) !important; 
-        color: #333 !important; 
-        border: 1px solid #f9c74f !important;
-    }
-    .badge-purple { 
-        background: linear-gradient(135deg, #764ba2 0%, #5d3a7e 100%) !important; 
-        color: white !important; 
-        border: 1px solid #5d3a7e !important;
-    }
-    
-    /* Fix Streamlit defaults */
-    .css-18e3th9 {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-        background: transparent !important;
-    }
-    
-    .css-1vq4p4l {
-        padding-top: 0 !important;
-        background: transparent !important;
-    }
-    
-    /* Expander styling - CLEAN DESIGN */
-    .streamlit-expanderHeader {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-        border: none !important;
-    }
-    
-    .streamlit-expanderContent {
-        background: white !important;
-        border-radius: 0 0 10px 10px !important;
-        padding: 20px !important;
-        border: 1px solid #e8e8e8 !important;
-        border-top: none !important;
-    }
-    
-    /* Chart containers - CLEAN DESIGN */
-    .js-plotly-plot {
+    .badge-green { background: linear-gradient(135deg, #06D6A0 0%, #04b586 100%) !important; color: white !important; border: 1px solid #04b586 !important; }
+    .badge-blue  { background: linear-gradient(135deg, #118AB2 0%, #0a6d8e 100%) !important; color: white !important; border: 1px solid #0a6d8e !important; }
+    .badge-red   { background: linear-gradient(135deg, #EF476F 0%, #e6305a 100%) !important; color: white !important; border: 1px solid #e6305a !important; }
+    .badge-yellow{ background: linear-gradient(135deg, #FFD166 0%, #f9c74f 100%) !important; color: #333 !important; border: 1px solid #f9c74f !important; }
+    .badge-purple{ background: linear-gradient(135deg, #764ba2 0%, #5d3a7e 100%) !important; color: white !important; border: 1px solid #5d3a7e !important; }
+
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* Sentence cards */
+    .sentence-card {
         background: white !important;
         border-radius: 10px !important;
         padding: 15px !important;
-        border: 1px solid #e8e8e8 !important;
-    }
-    
-    /* Quick stats box - CLEAN DESIGN */
-    .quick-stats-box {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
-        color: white !important;
-        border-radius: 10px !important;
-        padding: 20px !important;
         margin: 10px 0 !important;
-        border: 2px solid rgba(255,255,255,0.2) !important;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.08) !important;
+        border-left: 4px solid #06D6A0 !important;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.06) !important;
+        border: 1px solid #f0f0f0 !important;
     }
-    
-    /* File uploader - CLEAN DESIGN */
-    .stFileUploader {
-        background: white !important;
-        border-radius: 10px !important;
-        padding: 15px !important;
-        border: 2px dashed #667eea !important;
-    }
-    
-    /* Model comparison legend styling */
+    .sentence-card.negative { border-left-color: #EF476F !important; }
+    .sentence-card.neutral  { border-left-color: #FFD166 !important; }
+    .sentence-card.positive { border-left-color: #06D6A0 !important; }
+
     .legend-container {
         background: white !important;
         border-radius: 10px;
@@ -394,21 +137,18 @@ st.markdown("""
         border: 1px solid #e8e8e8;
         box-shadow: 0 2px 5px rgba(0,0,0,0.04);
     }
-    
     .legend-title {
         font-weight: bold;
         margin-bottom: 10px;
         color: #333;
         font-size: 1.1rem;
     }
-    
     .legend-item {
         display: flex;
         align-items: center;
         margin-bottom: 8px;
         font-size: 0.9rem;
     }
-    
     .legend-color {
         width: 20px;
         height: 20px;
@@ -416,72 +156,90 @@ st.markdown("""
         margin-right: 10px;
         border: 1px solid #ddd;
     }
-    
-    /* Clear sharp text */
-    .clear-text {
-        text-shadow: none !important;
-        filter: none !important;
-        opacity: 1 !important;
-        font-weight: bold !important;
-    }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# ==========================
-# ENHANCED VADER IMPLEMENTATION
-# ==========================
+# =========================================================
+# ENHANCED VADER (FIXED): phrase activation + true dominance + debuggable trace
+# =========================================================
 class EnhancedVADERPipeline:
+    """
+    Fixes:
+    1) Multi-word lexicon activation via phrase -> underscore tokenization
+    2) True dominance driven by WEIGHTED sentence polarity (compound * weight)
+    3) Live charts show per-text scores (not static dataset metrics)
+    """
+
     def __init__(self):
-        # Initialize analyzers
         self.sia_base = SentimentIntensityAnalyzer()
         self.sia_enh = SentimentIntensityAnalyzer()
-        
-        # Your actual thresholds from the pipeline
+
+        # Thresholds from your pipeline
         self.thresholds = {
-            'pos_thr': 0.30,
-            'neg_thr': -0.05,
-            'strong_neg_thr': -0.25,
-            'strong_pos_thr': 0.45,
+            "pos_thr": 0.30,
+            "neg_thr": -0.05,
+            "strong_neg_thr": -0.25,
+            "strong_pos_thr": 0.45,
         }
-        
-        # Your actual expanded lexicon from the pipeline
+
+        # Dominance blend (0=weighted avg only, 1=dominant sentence only)
+        self.alpha = 0.70
+
+        # Phrase replacement registry
+        self.phrase_map = {}
         self._load_enhanced_lexicon()
-        
-        # UNIFIED COLOR SCHEME - ONE COLOR PER METRIC, APPLIED CONSISTENTLY
+
+        # Colors (kept)
         self.color_scheme = {
-            # Model colors (for when we need to differentiate models)
             "models": {
-                "TextBlob": "#EF476F",        # Red
-                "VADER (Base)": "#118AB2",    # Blue
-                "VADER (Enhanced)": "#06D6A0" # Green
+                "TextBlob": "#EF476F",
+                "VADER (Base)": "#118AB2",
+                "VADER (Enhanced)": "#06D6A0",
             },
-            # Metric colors (for performance metrics - ONE COLOR PER METRIC)
             "metrics": {
-                "Accuracy": "#4ECDC4",         # Teal - Always for Accuracy
-                "Macro F1": "#FF6B6B",         # Coral - Always for Macro F1
-                "Negative F1": "#95E1D3",      # Light Teal - Always for Negative F1
-                "Positive F1": "#FFD166",      # Yellow - Always for Positive F1
-                "F1 Score": "#FF9A76"          # Orange - General F1 if needed
+                "Accuracy": "#4ECDC4",
+                "Macro F1": "#FF6B6B",
+                "Negative F1": "#95E1D3",
+                "Positive F1": "#FFD166",
             },
-            # Sentiment colors
             "sentiments": {
                 "negative": "#EF476F",
                 "neutral": "#FFD166",
-                "positive": "#06D6A0"
-            }
+                "positive": "#06D6A0",
+            },
         }
-        
-        # Model names mapping for consistent display
-        self.model_names = {
-            "TextBlob": "TextBlob",
-            "VADER_Base": "VADER (Base)",
-            "VADER_Enhanced": "VADER (Enhanced)"
-        }
-    
+
+    # -------------------------
+    # Phrase activation utilities
+    # -------------------------
+    def _register_phrases(self, phrase_scores: dict):
+        for phrase in phrase_scores.keys():
+            if " " in phrase.strip():
+                token = phrase.strip().lower().replace(" ", "_")
+                pattern = r"(?i)\b" + re.escape(phrase.strip()) + r"\b"
+                self.phrase_map[pattern] = f" {token} "
+
+    def _apply_phrase_tokenization(self, text: str) -> str:
+        if not isinstance(text, str):
+            text = str(text)
+
+        # Multi-word phrase -> underscored token
+        for pattern, repl in self.phrase_map.items():
+            text = re.sub(pattern, repl, text)
+
+        # Sarcasm/negation phrases -> tokens
+        text = re.sub(r"(?i)\byeah right\b", " yeah_right ", text)
+        text = re.sub(r"(?i)\bas if\b", " as_if ", text)
+        text = re.sub(r"(?i)\bnot bad\b", " not_bad ", text)
+        text = re.sub(r"(?i)\bnot too good\b", " not_too_good ", text)
+
+        return text
+
     def _load_enhanced_lexicon(self):
-        """Load the exact lexicon from your pipeline"""
-        # Car domain lexicon
-        car_lexicon = {
+        # Your lexicons (same content, we will convert phrases to underscore keys)
+        car_lexicon_phrases = {
             "fuel-efficient": 2.5, "fuel efficient": 2.5, "economical": 2.0,
             "overpriced": -3.0, "underpowered": -2.5, "noisy cabin": -2.5,
             "high maintenance": -3.0, "smooth ride": 2.6, "rough ride": -2.6,
@@ -491,9 +249,8 @@ class EnhancedVADERPipeline:
             "body roll": -1.6, "drinks fuel": -2.2, "top speed": 1.0,
             "silent cabin": 2.3,
         }
-        
-        # Finance lexicon
-        finance_lexicon = {
+
+        finance_lexicon_phrases = {
             "market crashed": -3.5, "market crash": -3.5, "bear market": -2.8,
             "bull market": 2.5, "profit warning": -3.5,
             "earnings beat expectations": 3.0, "missed estimates": -2.5,
@@ -501,8 +258,7 @@ class EnhancedVADERPipeline:
             "volatile session": -1.8, "record profits": 3.0,
             "surged": 2.0, "plunged": -2.5,
         }
-        
-        # General sentiment lexicon
+
         general_lexicon = {
             "terrible": -3.5, "horrible": -3.2, "awful": -3.2, "sucks": -2.8,
             "unacceptable": -3.0, "dangerous": -3.0, "disaster": -3.2,
@@ -510,444 +266,355 @@ class EnhancedVADERPipeline:
             "amazing": 3.0, "fantastic": 3.0, "brilliant": 2.8,
             "excellent": 2.8, "awesome": 2.5,
         }
-        
-        # Update enhanced lexicon
-        self.sia_enh.lexicon.update(car_lexicon)
-        self.sia_enh.lexicon.update(finance_lexicon)
-        self.sia_enh.lexicon.update(general_lexicon)
-        
-        # Sarcasm/negation phrases
-        self.sia_enh.lexicon.update({
+
+        sarcasm_tokens = {
             "yeah_right": -2.0,
             "as_if": -1.8,
             "not_bad": 1.5,
             "not_too_good": -1.5,
-        })
-    
-    def _preprocess_enh(self, text):
-        """Apply phrase replacements for sarcasm detection"""
-        if not isinstance(text, str):
-            text = str(text)
-        
-        phrase_replacements = [
-            (r"\byeah right\b", " yeah_right "),
-            (r"\bas if\b", " as_if "),
-            (r"\bnot bad\b", " not_bad "),
-            (r"\bnot too good\b", " not_too_good "),
-        ]
-        
-        for pattern, repl in phrase_replacements:
-            text = re.sub(pattern, repl, text, flags=re.IGNORECASE)
-        
-        return text
-    
-    def _simple_sent_tokenize(self, text):
-        """Simple sentence tokenizer"""
+        }
+
+        # Register multi-word phrases for replacement in text
+        self._register_phrases(car_lexicon_phrases)
+        self._register_phrases(finance_lexicon_phrases)
+
+        def to_token_lexicon(d):
+            out = {}
+            for k, v in d.items():
+                kk = k.strip().lower()
+                if " " in kk:
+                    kk = kk.replace(" ", "_")
+                out[kk] = v
+            return out
+
+        car_lexicon = to_token_lexicon(car_lexicon_phrases)
+        finance_lexicon = to_token_lexicon(finance_lexicon_phrases)
+
+        # Update enhanced lexicon
+        self.sia_enh.lexicon.update(car_lexicon)
+        self.sia_enh.lexicon.update(finance_lexicon)
+        self.sia_enh.lexicon.update({k.lower(): v for k, v in general_lexicon.items()})
+        self.sia_enh.lexicon.update(sarcasm_tokens)
+
+    # -------------------------
+    # Sentence handling + weighting
+    # -------------------------
+    def _simple_sent_tokenize(self, text: str):
         if not text:
             return []
-        
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
         sentences = [s.strip() for s in sentences if s.strip()]
-        
-        if not sentences:
-            sentences = [text.strip()]
-            
-        return sentences
-    
-    def _compute_sentence_weight(self, sentence):
-        """Compute weight based on sentence features"""
-        if not sentence or not isinstance(sentence, str):
-            return 1.0
-        
+        return sentences if sentences else [text.strip()]
+
+    def _compute_sentence_weight(self, sentence: str) -> float:
         tokens = sentence.split()
-        n_tokens = len(tokens)
-        len_weight = min(n_tokens / 8.0, 3.0) if n_tokens > 0 else 1.0
-        
-        exclam_count = sentence.count("!")
-        exclam_weight = 1.0 + min(exclam_count, 3) * 0.15
-        
+        n = len(tokens)
+
+        # Length weight: 1..3
+        len_weight = min(max(n / 8.0, 1.0), 3.0)
+
+        exclam_weight = 1.0 + min(sentence.count("!"), 3) * 0.20
         caps_words = [w for w in tokens if w.isupper() and len(w) > 2]
-        caps_weight = 1.0 + min(len(caps_words), 3) * 0.12
-        
-        return len_weight * exclam_weight * caps_weight
-    
+        caps_weight = 1.0 + min(len(caps_words), 3) * 0.15
+
+        # Contrast cue
+        contrast = 1.10 if re.search(r"(?i)\bbut\b|\bhowever\b", sentence) else 1.0
+
+        return len_weight * exclam_weight * caps_weight * contrast
+
+    # -------------------------
+    # Predictions
+    # -------------------------
     def textblob_predict(self, text, return_scores=False):
-        """TextBlob with your pipeline thresholds"""
         try:
-            polarity = TextBlob(str(text)).sentiment.polarity
-            if polarity >= 0.05:
+            pol = TextBlob(str(text)).sentiment.polarity
+            if pol >= 0.05:
                 label = "positive"
-            elif polarity <= -0.05:
+            elif pol <= -0.05:
                 label = "negative"
             else:
                 label = "neutral"
-            
-            if return_scores:
-                return label, {"polarity": polarity}
-            return label
+            return (label, {"polarity": float(pol)}) if return_scores else label
         except:
-            return "neutral"
-    
+            return ("neutral", {"polarity": 0.0}) if return_scores else "neutral"
+
     def vader_base_predict(self, text, return_scores=False):
-        """Base VADER with your pipeline thresholds"""
         try:
             scores = self.sia_base.polarity_scores(str(text))
-            compound = scores["compound"]
-            
-            if compound >= 0.05:
+            c = float(scores["compound"])
+            if c >= 0.05:
                 label = "positive"
-            elif compound <= -0.05:
+            elif c <= -0.05:
                 label = "negative"
             else:
                 label = "neutral"
-            
-            if return_scores:
-                return label, scores
-            return label
+            return (label, scores) if return_scores else label
         except:
-            return "neutral"
-    
+            fallback = {"compound": 0.0, "neg": 0.0, "neu": 1.0, "pos": 0.0}
+            return ("neutral", fallback) if return_scores else "neutral"
+
     def enhanced_vader_predict(self, text, return_scores=False):
-        """Enhanced VADER with sentence-level dominance - FIXED VERSION"""
+        """
+        True dominance:
+        - Phrase tokenization so multi-word lexicon activates
+        - Dominant sentence chosen by max |compound * weight|
+        - Final score = alpha*dominant_compound + (1-alpha)*weighted_avg
+        - Strong dominance triggers use WEIGHTED dominance
+        """
         try:
-            text_proc = self._preprocess_enh(str(text))
+            text_proc = self._apply_phrase_tokenization(str(text))
             sentences = self._simple_sent_tokenize(text_proc)
-            
-            if len(sentences) == 0:
+
+            if not sentences:
                 if return_scores:
-                    return "neutral", {"avg_compound": 0.0, "sentence_scores": []}
+                    return "neutral", {
+                        "final_score": 0.0,
+                        "weighted_avg": 0.0,
+                        "dominant_sentence_index": 0,
+                        "dominant_compound": 0.0,
+                        "dominant_weighted_compound": 0.0,
+                        "alpha": float(self.alpha),
+                        "dominance_rule": "empty_text",
+                        "sentence_scores": [],
+                    }
                 return "neutral"
-            
-            comps = []
-            weights = []
+
+            comps, weights, weighted_comps = [], [], []
             sentence_details = []
-            
+
             for s in sentences:
                 vs = self.sia_enh.polarity_scores(s)
-                comp = vs["compound"]
-                w = self._compute_sentence_weight(s)
+                comp = float(vs["compound"])
+                w = float(self._compute_sentence_weight(s))
+                wc = comp * w
+
                 comps.append(comp)
                 weights.append(w)
-                sentence_details.append({
-                    "sentence": s[:100] + "..." if len(s) > 100 else s,
-                    "compound": comp,
-                    "weight": w,
-                    "scores": vs
-                })
-            
+                weighted_comps.append(wc)
+
+                sentence_details.append(
+                    {
+                        "sentence": s if len(s) <= 160 else s[:160] + "...",
+                        "compound": comp,
+                        "weight": w,
+                        "weighted_compound": wc,
+                        "scores": vs,
+                    }
+                )
+
             comps = np.array(comps, dtype=float)
             weights = np.array(weights, dtype=float)
-            
-            # FIX: Always calculate weighted average first
-            if len(comps) > 0 and len(weights) > 0:
-                avg_score = float(np.average(comps, weights=weights))
-            else:
-                avg_score = 0.0
-            
-            # Dominance rules - FIXED: Store which rule was applied
-            dominance = "weighted_average"
-            if (comps <= self.thresholds['strong_neg_thr']).any():
+            weighted_comps = np.array(weighted_comps, dtype=float)
+
+            weighted_avg = float(np.average(comps, weights=weights)) if len(comps) else 0.0
+
+            dom_idx = int(np.argmax(np.abs(weighted_comps))) if len(weighted_comps) else 0
+            dominant_comp = float(comps[dom_idx]) if len(comps) else 0.0
+            dominant_weighted = float(weighted_comps[dom_idx]) if len(weighted_comps) else 0.0
+
+            dominance_rule = "blend_dominant_vs_weighted_avg"
+
+            # Strong dominance based on WEIGHTED dominance
+            if dominant_weighted <= self.thresholds["strong_neg_thr"]:
+                final_score = dominant_comp
                 label = "negative"
-                dominance = "strong_negative"
-            elif (comps >= self.thresholds['strong_pos_thr']).any():
+                dominance_rule = "strong_negative_weighted_dominance"
+            elif dominant_weighted >= self.thresholds["strong_pos_thr"]:
+                final_score = dominant_comp
                 label = "positive"
-                dominance = "strong_positive"
+                dominance_rule = "strong_positive_weighted_dominance"
             else:
-                if avg_score >= self.thresholds['pos_thr']:
+                final_score = float(self.alpha * dominant_comp + (1 - self.alpha) * weighted_avg)
+
+                if final_score >= self.thresholds["pos_thr"]:
                     label = "positive"
-                elif avg_score <= self.thresholds['neg_thr']:
+                elif final_score <= self.thresholds["neg_thr"]:
                     label = "negative"
                 else:
                     label = "neutral"
-            
+
+            # Tail "not!" rule (lightweight)
+            if re.search(r"(?i)\bnot[.!?]*\s*$", text_proc) and label == "positive":
+                final_score = min(final_score, 0.0)
+                label = "neutral" if final_score > self.thresholds["neg_thr"] else "negative"
+                dominance_rule = dominance_rule + " + tail_not_rule"
+
             if return_scores:
-                details = {
-                    "avg_compound": avg_score,
+                return label, {
+                    "final_score": float(final_score),
+                    "weighted_avg": float(weighted_avg),
+                    "dominant_sentence_index": int(dom_idx),
+                    "dominant_compound": float(dominant_comp),
+                    "dominant_weighted_compound": float(dominant_weighted),
+                    "alpha": float(self.alpha),
+                    "dominance_rule": dominance_rule,
                     "sentence_scores": sentence_details,
-                    "dominance_rule": dominance,
-                    "comps_list": comps.tolist(),
-                    "weights_list": weights.tolist(),
-                    "num_sentences": len(sentences)
+                    "num_sentences": int(len(sentences)),
                 }
-                return label, details
-            
+
             return label
-        except Exception as e:
-            return self.vader_base_predict(text, return_scores)
-    
+
+        except Exception:
+            return self.vader_base_predict(text, return_scores=return_scores)
+
     def analyze_text(self, text, return_detailed=False):
-        """Analyze text with all three models - FIXED VERSION"""
         tb_label, tb_scores = self.textblob_predict(text, return_scores=True)
         vb_label, vb_scores = self.vader_base_predict(text, return_scores=True)
         ve_label, ve_scores = self.enhanced_vader_predict(text, return_scores=True)
-        
-        # FIX: Ensure we always get the avg_compound score
-        vader_enhanced_score = 0.0
-        if isinstance(ve_scores, dict):
-            vader_enhanced_score = ve_scores.get("avg_compound", 0.0)
-        
-        result = {
+
+        res = {
             "text": text[:200] + "..." if len(str(text)) > 200 else text,
             "TextBlob": tb_label,
             "VADER_Base": vb_label,
             "VADER_Enhanced": ve_label,
-            "textblob_score": tb_scores.get("polarity", 0) if isinstance(tb_scores, dict) else 0,
-            "vader_base_score": vb_scores.get("compound", 0) if isinstance(vb_scores, dict) else 0,
-            "vader_enhanced_score": vader_enhanced_score,
+            "textblob_score": float(tb_scores.get("polarity", 0.0)),
+            "vader_base_score": float(vb_scores.get("compound", 0.0)),
+            "vader_enhanced_score": float(ve_scores.get("final_score", 0.0)),
         }
-        
+
         if return_detailed:
-            result.update({
-                "textblob_details": tb_scores,
-                "vader_base_details": vb_scores,
-                "vader_enhanced_details": ve_scores,
-            })
-        
-        return result
+            res.update(
+                {
+                    "textblob_details": tb_scores,
+                    "vader_base_details": vb_scores,
+                    "vader_enhanced_details": ve_scores,
+                }
+            )
+        return res
 
-# ==========================
-# CREATE PROPER STREAMLIT COMPONENTS INSTEAD OF RAW HTML
-# ==========================
 
+# =========================================================
+# UI HELPERS
+# =========================================================
 def create_wow_header():
-    """Create stunning header using Streamlit components"""
-    st.markdown("<h1 class='main-title clear-text'>🚀 ENHANCED VADER</h1>", unsafe_allow_html=True)
-    st.markdown("<p class='sub-title clear-text'>Advanced Multi-Domain Sentiment Analysis</p>", unsafe_allow_html=True)
-    
-    # Create badges using columns
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown('<div class="badge badge-purple clear-text">🏆 Best Model: Enhanced VADER</div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown('<div class="badge badge-green clear-text">🎯 55.6% Accuracy</div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown('<div class="badge badge-blue clear-text">⚡ Real-Time Analysis</div>', unsafe_allow_html=True)
-    with col4:
-        st.markdown('<div class="badge badge-red clear-text">🔬 Explainable AI</div>', unsafe_allow_html=True)
+    st.markdown("<h1 class='main-title'>🚀 ENHANCED VADER</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-title'>Advanced Multi-Domain Sentiment Analysis</p>", unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown('<div class="badge badge-purple">🧠 Explainable Rules</div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown('<div class="badge badge-green">⚡ Phrase-aware Lexicon</div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown('<div class="badge badge-blue">🧾 Sentence Dominance</div>', unsafe_allow_html=True)
+    with c4:
+        st.markdown('<div class="badge badge-red">📈 Live Score Charts</div>', unsafe_allow_html=True)
 
-def create_unified_legend(analyzer, chart_type="performance"):
-    """Create a unified legend system based on chart type"""
-    
-    if chart_type == "performance":
-        # For performance charts: Show metrics with their fixed colors
-        st.markdown("### 📊 Performance Metric Legend")
-        
-        with st.container():
-            st.markdown('<div class="legend-container">', unsafe_allow_html=True)
-            
-            # Title
-            st.markdown('<div class="legend-title">Metric Color Coding</div>', unsafe_allow_html=True)
-            
-            # Create legend items for each metric
-            metrics = analyzer.color_scheme["metrics"]
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                for metric_name, color in list(metrics.items())[:2]:
-                    st.markdown(f"""
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: {color};"></div>
-                        <span><strong>{metric_name}</strong></span>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            with col2:
-                for metric_name, color in list(metrics.items())[2:]:
-                    st.markdown(f"""
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: {color};"></div>
-                        <span><strong>{metric_name}</strong></span>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-    
-    elif chart_type == "model_comparison":
-        # For model comparison charts: Show models with their colors
-        st.markdown("### 🤖 Model Comparison Legend")
-        
-        with st.container():
-            st.markdown('<div class="legend-container">', unsafe_allow_html=True)
-            
-            # Title
-            st.markdown('<div class="legend-title">Model Identification</div>', unsafe_allow_html=True)
-            
-            # Create legend items for each model
-            models = analyzer.color_scheme["models"]
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.markdown(f"""
+
+def create_unified_legend(analyzer, chart_type="model_comparison"):
+    if chart_type == "model_comparison":
+        st.markdown("### 🤖 Model Legend")
+        st.markdown('<div class="legend-container">', unsafe_allow_html=True)
+        st.markdown('<div class="legend-title">Model Identification</div>', unsafe_allow_html=True)
+        models = analyzer.color_scheme["models"]
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(
+                f"""
                 <div class="legend-item">
                     <div class="legend-color" style="background-color: {models['TextBlob']};"></div>
-                    <span><strong>TextBlob</strong><br>Baseline Model</span>
+                    <span><strong>TextBlob</strong></span>
                 </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown(f"""
+                """,
+                unsafe_allow_html=True,
+            )
+        with col2:
+            st.markdown(
+                f"""
                 <div class="legend-item">
                     <div class="legend-color" style="background-color: {models['VADER (Base)']};"></div>
-                    <span><strong>VADER (Base)</strong><br>Standard Version</span>
+                    <span><strong>VADER (Base)</strong></span>
                 </div>
-                """, unsafe_allow_html=True)
-            
-            with col3:
-                st.markdown(f"""
+                """,
+                unsafe_allow_html=True,
+            )
+        with col3:
+            st.markdown(
+                f"""
                 <div class="legend-item">
                     <div class="legend-color" style="background-color: {models['VADER (Enhanced)']};"></div>
-                    <span><strong>VADER (Enhanced)</strong><br>Improved Version</span>
+                    <span><strong>VADER (Enhanced)</strong></span>
                 </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-    
-    elif chart_type == "sentiment":
-        # For sentiment charts: Show sentiment colors
-        st.markdown("### 😊 Sentiment Analysis Legend")
-        
-        with st.container():
-            st.markdown('<div class="legend-container">', unsafe_allow_html=True)
-            
-            # Title
-            st.markdown('<div class="legend-title">Sentiment Color Coding</div>', unsafe_allow_html=True)
-            
-            # Create legend items for each sentiment
-            sentiments = analyzer.color_scheme["sentiments"]
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.markdown(f"""
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: {sentiments['negative']};"></div>
-                    <span><strong>Negative</strong><br>Score ≤ -0.05</span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown(f"""
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: {sentiments['neutral']};"></div>
-                    <span><strong>Neutral</strong><br>-0.05 < Score < 0.30</span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col3:
-                st.markdown(f"""
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: {sentiments['positive']};"></div>
-                    <span><strong>Positive</strong><br>Score ≥ 0.30</span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+                """,
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
 def create_sentence_breakdown(sentence_details, analyzer):
-    """Create interactive sentence breakdown using Streamlit components"""
     for i, sent in enumerate(sentence_details, 1):
-        score = sent['compound']
-        weight = sent['weight']
+        score = sent["compound"]
+        w = sent["weight"]
+        wc = sent["weighted_compound"]
+
         sentiment = "positive" if score > 0.05 else "negative" if score < -0.05 else "neutral"
-        
-        # Get sentiment color
-        sentiment_color = analyzer.color_scheme["sentiments"][sentiment]
-        
-        # Determine CSS class based on sentiment
         card_class = f"sentence-card {sentiment}"
-        
-        # Create container for each sentence
-        with st.container():
-            st.markdown(f"""<div class="{card_class}">""", unsafe_allow_html=True)
-            
-            # Sentence header
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write(f"**Sentence {i}:** {sent['sentence']}")
-            with col2:
-                badge_color = "red" if sentiment == "negative" else "green" if sentiment == "positive" else "yellow"
-                st.markdown(f"""<span class="badge badge-{badge_color}">{sentiment.upper()}</span>""", unsafe_allow_html=True)
-            
-            # Score and weight
-            col_score, col_weight = st.columns(2)
-            with col_score:
-                st.write(f"**Score:** {score:.3f}")
-            with col_weight:
-                st.write(f"**Weight:** {weight:.2f}x")
-            
-            # Create gradient bar visualization
-            normalized_score = (score + 1) / 2  # Normalize to 0-1 scale
-            marker_position = normalized_score * 100
-            
-            # Create the gradient bar using HTML
-            st.markdown(f"""
-            <div style='width: 100%; height: 8px; background: linear-gradient(90deg, #EF476F, #FFD166, #06D6A0); 
-                        border-radius: 4px; margin: 10px 0; position: relative;'>
-                <div style='position: absolute; top: -4px; left: {marker_position}%; width: 16px; height: 16px; 
-                            background: white; border: 2px solid #333; border-radius: 50%; transform: translateX(-50%);'></div>
-            </div>
-            
-            <div style='display: flex; justify-content: space-between; font-size: 0.8rem; color: #666;'>
-                <span>-1.0 (Negative)</span>
-                <span>0.0 (Neutral)</span>
-                <span>+1.0 (Positive)</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Detailed scores
-            st.write("**Detailed Scores:**")
-            cols = st.columns(4)
-            with cols[0]:
-                st.metric("Negative", f"{sent['scores']['neg']:.3f}")
-            with cols[1]:
-                st.metric("Neutral", f"{sent['scores']['neu']:.3f}")
-            with cols[2]:
-                st.metric("Positive", f"{sent['scores']['pos']:.3f}")
-            with cols[3]:
-                st.metric("Compound", f"{sent['scores']['compound']:.3f}")
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-            st.write("")  # Add spacing
+        badge_color = "green" if sentiment == "positive" else "red" if sentiment == "negative" else "yellow"
+
+        st.markdown(f"<div class='{card_class}'>", unsafe_allow_html=True)
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(f"**Sentence {i}:** {sent['sentence']}")
+        with col2:
+            st.markdown(f"<span class='badge badge-{badge_color}'>{sentiment.upper()}</span>", unsafe_allow_html=True)
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.write(f"**Compound:** {score:.3f}")
+        with c2:
+            st.write(f"**Weight:** {w:.2f}×")
+        with c3:
+            st.write(f"**Weighted:** {wc:.3f}")
+
+        # Detailed scores
+        cols = st.columns(4)
+        with cols[0]:
+            st.metric("Neg", f"{sent['scores']['neg']:.3f}")
+        with cols[1]:
+            st.metric("Neu", f"{sent['scores']['neu']:.3f}")
+        with cols[2]:
+            st.metric("Pos", f"{sent['scores']['pos']:.3f}")
+        with cols[3]:
+            st.metric("Comp", f"{sent['scores']['compound']:.3f}")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
 def create_real_time_explanation(result, analyzer):
-    """Generate real-time explanation using Streamlit components"""
-    details = result.get("vader_enhanced_details", {})
-    final_score = result.get("vader_enhanced_score", 0)
-    final_label = result.get("VADER_Enhanced", "neutral")
-    dominance_rule = details.get("dominance_rule", "weighted_average")
-    
-    # Threshold Analysis
-    with st.expander("📊 Real-Time Threshold Analysis", expanded=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Final Score", f"{final_score:.3f}")
-            st.metric("Positive Threshold", f"≥ {analyzer.thresholds['pos_thr']}")
-        with col2:
-            st.metric("Negative Threshold", f"≤ {analyzer.thresholds['neg_thr']}")
-            st.metric("Strong Positive Threshold", f"≥ {analyzer.thresholds['strong_pos_thr']}")
-    
-    # Dominance Rule Explanation
-    if dominance_rule == "strong_negative":
-        st.error(f"⚡ **Strong Negative Dominance Applied**: At least one sentence scored ≤ {analyzer.thresholds['strong_neg_thr']} (strong negative threshold)")
-    elif dominance_rule == "strong_positive":
-        st.success(f"⚡ **Strong Positive Dominance Applied**: At least one sentence scored ≥ {analyzer.thresholds['strong_pos_thr']} (strong positive threshold)")
-    else:
-        st.info(f"⚖️ **Weighted Average Applied**: No single sentence triggered dominance rules")
-    
-    # Final Decision
-    st.success(f"✅ **Final Prediction**: {final_label.upper()}")
+    details = result.get("vader_enhanced_details", {}) or {}
+    final_score = float(details.get("final_score", 0.0))
+    weighted_avg = float(details.get("weighted_avg", 0.0))
+    dom_idx = int(details.get("dominant_sentence_index", 0))
+    dom_comp = float(details.get("dominant_compound", 0.0))
+    dom_wcomp = float(details.get("dominant_weighted_compound", 0.0))
+    dominance_rule = details.get("dominance_rule", "unknown")
 
-# ==========================
-# SINGLE ANALYSIS TAB - USING STREAMLIT COMPONENTS
-# ==========================
-def create_single_analysis_tab(analyzer):
-    """Single text analysis tab with WOW factor"""
+    st.markdown("## 🔬 Real-Time Enhanced VADER Decision Trace")
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Final Score", f"{final_score:.3f}")
+    with c2:
+        st.metric("Weighted Avg", f"{weighted_avg:.3f}")
+    with c3:
+        st.metric("Dominant Comp", f"{dom_comp:.3f}")
+    with c4:
+        st.metric("Dominant Weighted", f"{dom_wcomp:.3f}")
+
+    st.info(f"**Dominance Rule Applied:** `{dominance_rule}`")
+    st.write(f"**Dominant Sentence Index:** {dom_idx + 1} (1-based)")
+
+    # Thresholds shown
+    with st.expander("🎛 Thresholds Used", expanded=False):
+        st.json(analyzer.thresholds)
+
+
+# =========================================================
+# TABS
+# =========================================================
+def create_single_analysis_tab(analyzer: EnhancedVADERPipeline):
     st.markdown("## 🔍 Live Sentiment Analysis")
     st.markdown("---")
-    
-    # Example texts with emojis
+
     examples = {
         "🎯 Select an example...": "",
         "🚗 Car Review (Mixed)": "The engine performance is absolutely terrible and unreliable. However, the seats are surprisingly comfortable and the fuel economy is excellent.",
@@ -955,819 +622,298 @@ def create_single_analysis_tab(analyzer):
         "🐦 Twitter (Sarcastic)": "Yeah right, like this product is gonna last more than a week. Amazing quality... not!",
         "😠 Strong Negative": "This is the worst service I've ever experienced. Absolutely unacceptable and a complete waste of money!",
         "😊 Strong Positive": "Absolutely fantastic product! Exceeded all expectations and the customer service was brilliant!",
-        "🧠 Long Complex": "While the initial design and build quality are exceptional with premium materials used throughout, the software interface is frustratingly counter-intuitive and the battery life, though advertised as all-day, barely lasts through a morning of moderate use, which is disappointing given the high price point."
+        "🧠 Long Complex": "While the initial design and build quality are exceptional with premium materials used throughout, the software interface is frustratingly counter-intuitive and the battery life, though advertised as all-day, barely lasts through a morning of moderate use, which is disappointing given the high price point.",
     }
-    
+
     col1, col2 = st.columns([2, 1])
-    
     with col1:
-        selected_example = st.selectbox(
-            "Choose an example text:",
-            list(examples.keys()),
-            help="Select from our curated examples or write your own"
-        )
-        
+        selected_example = st.selectbox("Choose an example text:", list(examples.keys()))
         text = st.text_area(
             "**Enter your text for analysis:**",
             value=examples[selected_example],
-            height=150,
+            height=160,
             placeholder="Type or paste your text here...",
-            help="Enter any text to analyze its sentiment across three advanced models"
         )
-    
-    with col2:
-        st.markdown("### 🎯 Quick Stats")
-        with st.container():
-            st.markdown('<div class="quick-stats-box">', unsafe_allow_html=True)
-            st.write("**Enhanced VADER:** 55.6% Accuracy")
-            st.write("**Base VADER:** 54.0% Accuracy")
-            st.write("**TextBlob:** 50.2% Accuracy")
-            st.write("**Improvement:** +2.9% vs Baseline")
-            st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Divider
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    
-    if st.button("🚀 **ANALYZE SENTIMENT**", type="primary", use_container_width=True):
-        if text.strip():
-            with st.spinner("🤖 **Analyzing with advanced AI models...**"):
-                # Add loading animation
-                progress_bar = st.progress(0)
-                for i in range(100):
-                    time.sleep(0.01)
-                    progress_bar.progress(i + 1)
-                
-                # Analyze text
-                result = analyzer.analyze_text(text, return_detailed=True)
-                
-                # Display results in three columns
-                col1, col2, col3 = st.columns(3)
-                
-                # TextBlob Card
-                with col1:
-                    with st.container():
-                        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                        st.markdown("### 📊 TextBlob")
-                        st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['TextBlob']}; font-size: 3rem; text-align: center;'>{result['TextBlob'].upper()}</h1>", unsafe_allow_html=True)
-                        st.write("**Prediction**")
-                        st.write(f"**📈 Score:** {result['textblob_score']:.3f}")
-                        st.write(f"**🎯 Class:** {result['TextBlob'].capitalize()}")
-                        st.write("**⚡ Model:** Baseline")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                
-                # VADER Base Card
-                with col2:
-                    with st.container():
-                        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                        st.markdown("### 📊 VADER (Base)")
-                        st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['VADER (Base)']}; font-size: 3rem; text-align: center;'>{result['VADER_Base'].upper()}</h1>", unsafe_allow_html=True)
-                        st.write("**Prediction**")
-                        st.write(f"**📈 Score:** {result['vader_base_score']:.3f}")
-                        st.write(f"**🎯 Class:** {result['VADER_Base'].capitalize()}")
-                        st.write("**⚡ Model:** Standard")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                
-                # VADER Enhanced Card - BEST MODEL HIGHLIGHT
-                with col3:
-                    with st.container():
-                        st.markdown('<div class="best-model-card">', unsafe_allow_html=True)
-                        st.markdown("### 🏆 ENHANCED VADER")
-                        st.markdown(f"<h1 style='color: white; font-size: 3.5rem; text-align: center;'>{result['VADER_Enhanced'].upper()}</h1>", unsafe_allow_html=True)
-                        st.write("**BEST PREDICTION**")
-                        st.write(f"**📈 Score:** {result['vader_enhanced_score']:.3f}")
-                        st.write(f"**🎯 Class:** {result['VADER_Enhanced'].capitalize()}")
-                        st.write("**⚡ Model:** **ENHANCED**")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Divider
-                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                
-                # BEST MODEL DECLARATION
-                st.success("🏆 **ENHANCED VADER SELECTED AS BEST MODEL** - Based on superior accuracy (55.6% vs 54.0% Base VADER) and advanced features")
-                
-                # Add model comparison legend
-                create_unified_legend(analyzer, chart_type="model_comparison")
-                
-                # REAL-TIME EXPLAINABILITY SECTION
-                st.markdown("## 🔬 **Real-Time Enhanced VADER Explainability**")
-                
-                with st.expander("📖 **How Enhanced VADER Made This Decision**", expanded=True):
-                    col1, col2 = st.columns([2, 1])
-                    
-                    with col1:
-                        st.markdown("""
-                        ### 🎯 **Three Key Advantages (REAL-TIME):**
-                        
-                        **1. 🧠 Domain-Specific Intelligence**
-                        - **+38 car/finance terms** detected in real-time
-                        - **Sarcasm detection** ("yeah right", "as if")
-                        - **Negation handling** ("not bad" = positive)
-                        
-                        **2. ⚡ Sentence-Level Dominance**
-                        - **Strong negative dominance**: Any sentence ≤ -0.25 → Negative
-                        - **Strong positive dominance**: Any sentence ≥ 0.45 → Positive
-                        - **Weighted averaging**: Considers sentence length & emphasis
-                        
-                        **3. 🎛️ Optimized Thresholds**
-                        - **Positive threshold**: 0.30 (vs 0.05 baseline)
-                        - **Negative threshold**: -0.05
-                        - **Reduces false positives by 40%**
-                        
-                        ### 📊 **Performance Proof:**
-                        - **+2.9% more accurate** than Base VADER
-                        - **+11.1% better** than TextBlob
-                        - **Best Negative F1** score (0.488)
-                        - **Statistical significance**: p < 0.001
-                        """)
-                    
-                    with col2:
-                        # Simple accuracy comparison chart
-                        models_chart = ["TextBlob", "VADER (Base)", "VADER (Enhanced)"]
-                        accuracy_values = [0.502, 0.540, 0.556]
-                        
-                        # Get model colors
-                        model_colors = analyzer.color_scheme["models"]
-                        
-                        fig = go.Figure(data=[
-                            go.Bar(
-                                x=models_chart, 
-                                y=accuracy_values,
-                                marker_color=[
-                                    model_colors["TextBlob"],
-                                    model_colors["VADER (Base)"],
-                                    model_colors["VADER (Enhanced)"]
-                                ],
-                                hovertemplate='<b>%{x}</b><br>Accuracy: %{y:.3f}<extra></extra>',
-                                text=[f'{val:.1%}' for val in accuracy_values],
-                                textposition='auto'
-                            )
-                        ])
-                        
-                        fig.update_layout(
-                            title="Model Accuracy Comparison",
-                            yaxis_title="Accuracy",
-                            yaxis_range=[0, 1],
-                            showlegend=False,
-                            height=300,
-                            plot_bgcolor='white',
-                            paper_bgcolor='white',
-                            font=dict(color='#333')
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                # ENHANCED VADER REAL-TIME ANALYSIS
-                if "vader_enhanced_details" in result and isinstance(result["vader_enhanced_details"], dict):
-                    details = result["vader_enhanced_details"]
-                    
-                    # Display real-time explanation using Streamlit components
-                    create_real_time_explanation(result, analyzer)
-                    
-                    st.markdown("### 📝 **Sentence-Level Analysis (REAL-TIME)**")
-                    
-                    # Real-time explanation of how scores work
-                    with st.expander("📚 **How Sentence Scoring Works (Based on Your Text)**", expanded=True):
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.markdown("""
-                            ### 🎯 **Sentence Scores (-1.0 to +1.0)**
-                            Each sentence gets a **compound score**:
-                            
-                            ```
-                            Score Range    Meaning
-                            -----------    -------
-                            -1.0 to -0.5  Very Negative
-                            -0.5 to -0.1  Negative
-                            -0.1 to +0.1  Neutral
-                            +0.1 to +0.5  Positive
-                            +0.5 to +1.0  Very Positive
-                            ```
-                            
-                            **Example from your text:**
-                            - "I love this!" → +0.75
-                            - "It's okay" → +0.10
-                            - "I hate this" → -0.80
-                            """)
-                        
-                        with col2:
-                            st.markdown("""
-                            ### ⚖️ **Sentence Weights (0.0 to 3.0+)**
-                            How "important" each sentence is:
-                            
-                            **Factors that increase weight:**
-                            - 📏 **Longer sentences** (up to 3x)
-                            - ❗ **Exclamation marks!** (more = higher weight)
-                            - 🔠 **ALL CAPS words** (emphasized words)
-                            
-                            **Example weights from your text:**
-                            - "Good." → 1.0
-                            - "This is VERY GOOD!!" → 2.3
-                            - "Long detailed review..." → 2.8
-                            """)
-                    
-                    # Dominance Rules Explanation (Real-time based on actual results)
-                    with st.expander("🏆 **Dominance Rules Applied to Your Text**", expanded=True):
-                        dominance_rule = details.get("dominance_rule", "weighted_average")
-                        
-                        if dominance_rule == "strong_negative":
-                            st.error("### 1️⃣ **Strong Negative Dominance APPLIED**")
-                            st.write("**Rule:** If ANY sentence ≤ -0.25 → **Entire text = NEGATIVE**")
-                            st.write("**What happened in YOUR text:**")
-                            st.write("- At least one sentence scored ≤ -0.25")
-                            st.write("- This triggered strong negative dominance")
-                            st.write("- Weighted average calculation was overridden")
-                            st.write("- Final prediction: **NEGATIVE**")
-                            
-                            # Find which sentence triggered it
-                            for i, sent in enumerate(details.get("sentence_scores", []), 1):
-                                if sent['compound'] <= analyzer.thresholds['strong_neg_thr']:
-                                    st.write(f"**Triggering Sentence {i}:** `{sent['sentence']}`")
-                                    st.write(f"**Score:** {sent['compound']:.3f} (≤ {analyzer.thresholds['strong_neg_thr']})")
-                                    
-                        elif dominance_rule == "strong_positive":
-                            st.success("### 2️⃣ **Strong Positive Dominance APPLIED**")
-                            st.write("**Rule:** If ANY sentence ≥ +0.45 → **Entire text = POSITIVE**")
-                            st.write("**What happened in YOUR text:**")
-                            st.write("- At least one sentence scored ≥ +0.45")
-                            st.write("- This triggered strong positive dominance")
-                            st.write("- Weighted average calculation was overridden")
-                            st.write("- Final prediction: **POSITIVE**")
-                            
-                            # Find which sentence triggered it
-                            for i, sent in enumerate(details.get("sentence_scores", []), 1):
-                                if sent['compound'] >= analyzer.thresholds['strong_pos_thr']:
-                                    st.write(f"**Triggering Sentence {i}:** `{sent['sentence']}`")
-                                    st.write(f"**Score:** {sent['compound']:.3f} (≥ {analyzer.thresholds['strong_pos_thr']})")
-                                    
-                        else:
-                            st.info("### 3️⃣ **Weighted Average APPLIED (No Dominance)**")
-                            st.write("**Rule:** If no dominance → Average all scores (weighted)")
-                            st.write("**What happened in YOUR text:**")
-                            st.write("- No sentence triggered dominance rules")
-                            st.write("- Using weighted average of all sentence scores")
-                            st.write("- Final score compared with thresholds")
-                    
-                    if details.get("sentence_scores"):
-                        # Display interactive sentence visualization
-                        st.markdown("#### 🔬 **Interactive Sentence Breakdown**")
-                        
-                        # Create sentence visualizations using Streamlit
-                        create_sentence_breakdown(details["sentence_scores"], analyzer)
-                        
-                        # Add a summary table
-                        summary_data = []
-                        for i, sent in enumerate(details["sentence_scores"], 1):
-                            sentiment = "Positive" if sent['compound'] > 0.05 else "Negative" if sent['compound'] < -0.05 else "Neutral"
-                            summary_data.append({
-                                "Sentence #": i,
-                                "Text": sent['sentence'][:50] + "..." if len(sent['sentence']) > 50 else sent['sentence'],
-                                "Score": f"{sent['compound']:.3f}",
-                                "Weight": f"{sent['weight']:.2f}",
-                                "Sentiment": sentiment,
-                                "Dominance Trigger": "✅" if (sent['compound'] <= analyzer.thresholds['strong_neg_thr'] or sent['compound'] >= analyzer.thresholds['strong_pos_thr']) else ""
-                            })
-                        
-                        # Display summary table
-                        with st.expander("📋 **Sentence Summary Table**", expanded=True):
-                            st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
-                    
-                    # Real-time calculation explanation
-                    with st.expander("🧮 **See the Actual Math Behind Your Prediction**", expanded=False):
-                        if details.get("comps_list") and details.get("weights_list"):
-                            comps = details["comps_list"]
-                            weights = details["weights_list"]
-                            
-                            st.markdown("### Weighted Average Calculation:")
-                            st.markdown("**Formula:**")
-                            st.latex(r"\text{Final Score} = \frac{\sum(\text{Score}_i \times \text{Weight}_i)}{\sum \text{Weight}_i}")
-                            
-                            st.markdown("**Your calculation:**")
-                            
-                            numerator = sum(c * w for c, w in zip(comps, weights))
-                            denominator = sum(weights)
-                            final_score = numerator / denominator if denominator != 0 else 0
-                            
-                            st.code(f"""
-                            Numerator = ({comps[0]:.3f} × {weights[0]:.2f}) {'+ ' + f'({comps[i]:.3f} × {weights[i]:.2f})' for i in range(1, len(comps))}
-                                   = {numerator:.3f}
-                            
-                            Denominator = {weights[0]:.2f} {'+ ' + f'{weights[i]:.2f}' for i in range(1, len(weights))}
-                                       = {denominator:.2f}
-                            
-                            Final Score = {numerator:.3f} / {denominator:.2f} = {final_score:.3f}
-                            """)
-                            
-                            st.markdown(f"""
-                            **Threshold Check:**
-                            - Is {final_score:.3f} ≥ {analyzer.thresholds['pos_thr']}? **{final_score >= analyzer.thresholds['pos_thr']}**
-                            - Is {final_score:.3f} ≤ {analyzer.thresholds['neg_thr']}? **{final_score <= analyzer.thresholds['neg_thr']}**
-                            """)
-                
-                # UPDATED: PERFORMANCE METRICS VISUALIZATIONS WITH UNIFIED LEGENDS
-                st.markdown("## 📊 **Model Performance Comparison**")
-                
-                # Add performance metric legend
-                create_unified_legend(analyzer, chart_type="performance")
-                
-                # Create grouped bar chart for Accuracy and Macro F1 - USING METRIC COLORS
-                models_chart = ["TextBlob", "VADER (Base)", "VADER (Enhanced)"]
-                accuracy_scores = [0.502, 0.540, 0.556]
-                macro_f1_scores = [0.471, 0.530, 0.542]
-                
-                # Get metric colors
-                metric_colors = analyzer.color_scheme["metrics"]
-                
-                fig = go.Figure(data=[
-                    go.Bar(
-                        name='Accuracy',
-                        x=models_chart,
-                        y=accuracy_scores,
-                        marker_color=metric_colors["Accuracy"],  # SAME COLOR FOR ALL MODELS
-                        text=[f'{acc:.1%}' for acc in accuracy_scores],
-                        textposition='auto',
-                        hovertemplate='<b>%{x}</b><br>Accuracy: %{y:.3f}<extra></extra>'
-                    ),
-                    go.Bar(
-                        name='Macro F1',
-                        x=models_chart,
-                        y=macro_f1_scores,
-                        marker_color=metric_colors["Macro F1"],  # SAME COLOR FOR ALL MODELS
-                        text=[f'{f1:.1%}' for f1 in macro_f1_scores],
-                        textposition='auto',
-                        hovertemplate='<b>%{x}</b><br>Macro F1: %{y:.3f}<extra></extra>'
-                    )
-                ])
-                
-                fig.update_layout(
-                    title="Model Performance Metrics (Test Set: n=5,055)",
-                    xaxis_title="Model",
-                    yaxis_title="Score",
-                    yaxis_range=[0, 0.7],
-                    barmode='group',
-                    height=500,
-                    plot_bgcolor='white',
-                    paper_bgcolor='white',
-                    font=dict(size=12, color='#333'),
-                    showlegend=True,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=1.02,
-                        xanchor="center",
-                        x=0.5,
-                        bgcolor='rgba(255,255,255,0.8)',
-                        bordercolor='#e0e0e0',
-                        borderwidth=1
-                    )
-                )
-                
-                # Add improvement annotation
-                fig.add_annotation(
-                    x=2, y=0.556,
-                    text="+2.9% vs Base VADER",
-                    showarrow=True,
-                    arrowhead=1,
-                    ax=0,
-                    ay=-40,
-                    font=dict(size=12, color="#06D6A0")
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Add detailed metrics table
-                st.markdown("### 📈 **Detailed Performance Metrics**")
-                
-                performance_data = {
-                    'Model': ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)'],
-                    'Accuracy': [0.502, 0.540, 0.556],
-                    'Macro F1': [0.471, 0.530, 0.542],
-                    'Negative F1': [0.349, 0.485, 0.488],
-                    'Positive F1': [0.512, 0.543, 0.561],
-                    'Improvement vs Baseline': ['-', '+7.6%', '+10.8%']
-                }
-                
-                perf_df = pd.DataFrame(performance_data)
-                
-                # Create styled dataframe with colored background
-                styled_df = perf_df.style.format({
-                    'Accuracy': '{:.3f}',
-                    'Macro F1': '{:.3f}',
-                    'Negative F1': '{:.3f}',
-                    'Positive F1': '{:.3f}'
-                }).apply(lambda x: ['background: linear-gradient(90deg, #06D6A0 0%, #04b586 100%); color: white' 
-                                   if x.name == 'VADER (Enhanced)' else '' for i in x], axis=1)
-                
-                st.dataframe(styled_df, use_container_width=True)
-                
-                # Radar chart for comprehensive comparison
-                st.markdown("### 🎯 **Comprehensive Model Comparison**")
-                
-                categories = ['Accuracy', 'Macro F1', 'Negative F1', 'Positive F1']
-                
-                fig_radar = go.Figure()
-                
-                for idx, model in enumerate(perf_df['Model']):
-                    values = perf_df.loc[idx, categories].tolist()
-                    values += values[:1]  # Close the radar
-                    
-                    # Use model colors for radar chart (differentiating models)
-                    model_colors = analyzer.color_scheme["models"]
-                    line_color = model_colors[model]
-                    
-                    fig_radar.add_trace(go.Scatterpolar(
-                        r=values,
-                        theta=categories + [categories[0]],
-                        name=model,
-                        fill='toself',
-                        line_color=line_color,
-                        fillcolor=line_color.replace(')', ', 0.3)').replace('rgb', 'rgba'),
-                        opacity=0.6
-                    ))
-                
-                fig_radar.update_layout(
-                    polar=dict(
-                        radialaxis=dict(
-                            visible=True,
-                            range=[0, 0.6]
-                        )),
-                    showlegend=True,
-                    height=500,
-                    title="Performance Radar Chart",
-                    plot_bgcolor='white',
-                    paper_bgcolor='white'
-                )
-                
-                st.plotly_chart(fig_radar, use_container_width=True)
-                
-                # Stacked bar chart for F1 scores - USING METRIC COLORS
-                st.markdown("### 📊 **F1 Score Breakdown by Model**")
-                
-                fig_f1 = go.Figure(data=[
-                    go.Bar(
-                        name='Negative F1',
-                        x=models_chart,
-                        y=[0.349, 0.485, 0.488],
-                        marker_color=metric_colors["Negative F1"],  # SAME COLOR FOR ALL MODELS
-                        text=[f'{val:.1%}' for val in [0.349, 0.485, 0.488]],
-                        textposition='auto',
-                        hovertemplate='<b>%{x}</b><br>Negative F1: %{y:.3f}<extra></extra>'
-                    ),
-                    go.Bar(
-                        name='Positive F1',
-                        x=models_chart,
-                        y=[0.512, 0.543, 0.561],
-                        marker_color=metric_colors["Positive F1"],  # SAME COLOR FOR ALL MODELS
-                        text=[f'{val:.1%}' for val in [0.512, 0.543, 0.561]],
-                        textposition='auto',
-                        hovertemplate='<b>%{x}</b><br>Positive F1: %{y:.3f}<extra></extra>'
-                    )
-                ])
-                
-                fig_f1.update_layout(
-                    title="F1 Score Breakdown by Sentiment Class",
-                    xaxis_title="Model",
-                    yaxis_title="F1 Score",
-                    yaxis_range=[0, 0.7],
-                    barmode='group',
-                    height=400,
-                    plot_bgcolor='white',
-                    paper_bgcolor='white',
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=1.02,
-                        xanchor="center",
-                        x=0.5
-                    )
-                )
-                
-                st.plotly_chart(fig_f1, use_container_width=True)
-                
-                # Pie chart for predictions
-                st.markdown("### 🥧 **Current Text Prediction Distribution**")
-                
-                predictions = [result["TextBlob"], result["VADER_Base"], result["VADER_Enhanced"]]
-                
-                fig_pie = go.Figure(data=[go.Pie(
-                    labels=list(set(predictions)),
-                    values=[predictions.count(p) for p in set(predictions)],
-                    marker_colors=[analyzer.color_scheme["sentiments"][p] for p in set(predictions)],
-                    hole=.4,
-                    textinfo='label+percent',
-                    hoverinfo='label+value+percent',
-                    pull=[0.1 if p == result["VADER_Enhanced"] else 0 for p in set(predictions)]
-                )])
-                
-                fig_pie.update_layout(
-                    title="Model Predictions for Current Text",
-                    height=400,
-                    showlegend=True,
-                    plot_bgcolor='white',
-                    paper_bgcolor='white',
-                    annotations=[dict(
-                        text=f'Best Model:<br>{result["VADER_Enhanced"].upper()}',
-                        x=0.5, y=0.5, font_size=16, showarrow=False
-                    )]
-                )
-                
-                st.plotly_chart(fig_pie, use_container_width=True)
-                
-        else:
-            st.warning("⚠️ **Please enter some text to analyze!**")
 
-# ==========================
-# BATCH ANALYSIS TAB - USING STREAMLIT COMPONENTS
-# ==========================
-def create_batch_analysis_tab(analyzer):
-    """Batch file analysis tab"""
+        st.markdown("### ⚙️ Enhanced VADER Controls")
+        analyzer.alpha = st.slider(
+            "Sentence dominance strength (alpha)",
+            min_value=0.0,
+            max_value=1.0,
+            value=float(analyzer.alpha),
+            step=0.05,
+            help="0 = pure weighted average; 1 = pure dominant sentence. Recommended: 0.65–0.80",
+        )
+
+    with col2:
+        st.markdown("### 🧭 What changes in Live mode?")
+        st.write("- **Scores** update per text (dynamic).")
+        st.write("- **Dataset metrics** are only in the Performance tab (static by design).")
+        st.write("- Enhanced lexicon now **activates phrases** like `smooth ride`, `market crashed`.")
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    if st.button("🚀 **ANALYZE SENTIMENT**", type="primary", use_container_width=True):
+        if not text.strip():
+            st.warning("⚠️ Please enter some text to analyze.")
+            return
+
+        with st.spinner("🤖 Analyzing..."):
+            progress_bar = st.progress(0)
+            for i in range(100):
+                time.sleep(0.006)
+                progress_bar.progress(i + 1)
+
+            result = analyzer.analyze_text(text, return_detailed=True)
+
+        # Cards
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.markdown("### 📊 TextBlob")
+            st.markdown(
+                f"<h1 style='color:{analyzer.color_scheme['models']['TextBlob']}; font-size:3rem; text-align:center;'>{result['TextBlob'].upper()}</h1>",
+                unsafe_allow_html=True,
+            )
+            st.write(f"**Polarity:** {result['textblob_score']:.3f}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with c2:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.markdown("### 📊 VADER (Base)")
+            st.markdown(
+                f"<h1 style='color:{analyzer.color_scheme['models']['VADER (Base)']}; font-size:3rem; text-align:center;'>{result['VADER_Base'].upper()}</h1>",
+                unsafe_allow_html=True,
+            )
+            st.write(f"**Compound:** {result['vader_base_score']:.3f}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with c3:
+            st.markdown('<div class="best-model-card">', unsafe_allow_html=True)
+            st.markdown("### 🏆 VADER (Enhanced)")
+            st.markdown(
+                f"<h1 style='color:white; font-size:3.2rem; text-align:center;'>{result['VADER_Enhanced'].upper()}</h1>",
+                unsafe_allow_html=True,
+            )
+            st.write(f"**Final Score:** {result['vader_enhanced_score']:.3f}")
+            st.write(f"**Alpha:** {analyzer.alpha:.2f}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+        # Legends
+        create_unified_legend(analyzer, "model_comparison")
+
+        # ✅ LIVE SCORE CHART (dynamic, per input text)
+        st.markdown("## 📌 Live Score Comparison (Current Text)")
+
+        score_df = pd.DataFrame(
+            {
+                "Model": ["TextBlob", "VADER (Base)", "VADER (Enhanced)"],
+                "Score": [
+                    result["textblob_score"],
+                    result["vader_base_score"],
+                    result["vader_enhanced_score"],
+                ],
+            }
+        )
+
+        fig_live = go.Figure(
+            data=[
+                go.Bar(
+                    x=score_df["Model"],
+                    y=score_df["Score"],
+                    text=[f"{v:.3f}" for v in score_df["Score"]],
+                    textposition="auto",
+                )
+            ]
+        )
+        fig_live.update_layout(
+            title="Live Polarity / Compound Score (Updates Per Input)",
+            yaxis_title="Score (TextBlob polarity, VADER compound)",
+            yaxis_range=[-1, 1],
+            height=360,
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+        )
+        st.plotly_chart(fig_live, use_container_width=True)
+
+        # ✅ Explainability / Trace
+        create_real_time_explanation(result, analyzer)
+
+        details = result.get("vader_enhanced_details", {}) or {}
+        sentence_scores = details.get("sentence_scores", [])
+
+        if sentence_scores:
+            st.markdown("### 🧾 Sentence-Level Breakdown (Enhanced VADER)")
+            with st.expander("Show sentence scores + weights", expanded=True):
+                create_sentence_breakdown(sentence_scores, analyzer)
+
+            # Summary table
+            rows = []
+            dom_idx = int(details.get("dominant_sentence_index", 0))
+            for i, sent in enumerate(sentence_scores):
+                rows.append(
+                    {
+                        "Sentence #": i + 1,
+                        "Text": sent["sentence"],
+                        "Compound": round(sent["compound"], 3),
+                        "Weight": round(sent["weight"], 2),
+                        "Weighted": round(sent["weighted_compound"], 3),
+                        "Dominant?": "✅" if i == dom_idx else "",
+                    }
+                )
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+
+def create_batch_analysis_tab(analyzer: EnhancedVADERPipeline):
     st.markdown("## 📊 Batch File Analysis")
     st.markdown("---")
-    
-    uploaded_file = st.file_uploader(
-        "**Upload your CSV or TXT file**",
-        type=['csv', 'txt'],
-        help="Upload a file containing text to analyze (one text per line)"
-    )
-    
-    if uploaded_file:
-        try:
-            if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
-            else:
-                content = StringIO(uploaded_file.getvalue().decode("utf-8"))
-                lines = [line.strip() for line in content if line.strip()]
-                df = pd.DataFrame({'text': lines})
-            
-            st.success(f"✅ **Loaded {len(df):,} records successfully!**")
-            
-            with st.expander("📋 **Preview Data**", expanded=True):
-                st.dataframe(df.head(10), use_container_width=True)
-            
-            if len(df.columns) > 1:
-                text_col = st.selectbox("Select text column:", df.columns.tolist())
-            else:
-                text_col = df.columns[0]
-            
-            if st.button("🚀 **ANALYZE BATCH**", type="primary", use_container_width=True):
-                with st.spinner(f"🤖 **Processing {len(df):,} texts with advanced AI...**"):
-                    # Progress bar
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    results = []
-                    for i, text in enumerate(df[text_col]):
-                        result = analyzer.analyze_text(str(text))
-                        results.append(result)
-                        
-                        # Update progress
-                        progress = (i + 1) / len(df)
-                        progress_bar.progress(progress)
-                        status_text.text(f"📊 Processing: {i + 1}/{len(df)} texts")
-                    
-                    results_df = pd.DataFrame(results)
-                    results_df['Consensus'] = results_df[['TextBlob', 'VADER_Base', 'VADER_Enhanced']].mode(axis=1)[0]
-                    
-                    st.balloons()
-                    st.success(f"🎉 **Analysis complete! Processed {len(df):,} texts.**")
-                    
-                    # Summary statistics with colored backgrounds
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    with col1:
-                        enhanced_counts = results_df['VADER_Enhanced'].value_counts()
-                        with st.container():
-                            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                            st.markdown("### Enhanced VADER")
-                            st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['VADER (Enhanced)']}; font-size: 2.5rem; text-align: center;'>{len(results_df)}</h1>", unsafe_allow_html=True)
-                            st.write("**Total Texts**")
-                            st.write(f"**📈 Positive:** {enhanced_counts.get('positive', 0)}")
-                            st.write(f"**📉 Negative:** {enhanced_counts.get('negative', 0)}")
-                            st.write(f"**⚖️ Neutral:** {enhanced_counts.get('neutral', 0)}")
-                            st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with col2:
-                        textblob_counts = results_df['TextBlob'].value_counts()
-                        with st.container():
-                            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                            st.markdown("### TextBlob")
-                            st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['TextBlob']}; font-size: 2.5rem; text-align: center;'>{len(results_df)}</h1>", unsafe_allow_html=True)
-                            st.write("**Total Texts**")
-                            st.write(f"**📈 Positive:** {textblob_counts.get('positive', 0)}")
-                            st.write(f"**📉 Negative:** {textblob_counts.get('negative', 0)}")
-                            st.write(f"**⚖️ Neutral:** {textblob_counts.get('neutral', 0)}")
-                            st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with col3:
-                        vader_counts = results_df['VADER_Base'].value_counts()
-                        with st.container():
-                            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                            st.markdown("### VADER Base")
-                            st.markdown(f"<h1 style='color: {analyzer.color_scheme['models']['VADER (Base)']}; font-size: 2.5rem; text-align: center;'>{len(results_df)}</h1>", unsafe_allow_html=True)
-                            st.write("**Total Texts**")
-                            st.write(f"**📈 Positive:** {vader_counts.get('positive', 0)}")
-                            st.write(f"**📉 Negative:** {vader_counts.get('negative', 0)}")
-                            st.write(f"**⚖️ Neutral:** {vader_counts.get('neutral', 0)}")
-                            st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with col4:
-                        agreement = (results_df['TextBlob'] == results_df['VADER_Base']) & \
-                                   (results_df['VADER_Base'] == results_df['VADER_Enhanced'])
-                        agreement_percent = agreement.mean() * 100
-                        
-                        with st.container():
-                            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                            st.markdown("### Model Agreement")
-                            st.markdown(f"<h1 style='color: #764ba2; font-size: 2.5rem; text-align: center;'>{agreement.sum():,}</h1>", unsafe_allow_html=True)
-                            st.write("**Agreeing Texts**")
-                            st.write(f"**📊 Agreement Rate:** {agreement_percent:.1f}%")
-                            st.write(f"**🤝 Consensus:** {results_df['Consensus'].value_counts().index[0] if len(results_df['Consensus'].value_counts()) > 0 else 'N/A'}")
-                            st.write(f"**🔀 Disagreements:** {len(results_df) - agreement.sum():,}")
-                            st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    # Display results
-                    with st.expander("📊 **View Results**", expanded=True):
-                        st.dataframe(results_df, use_container_width=True)
-                    
-                    # Download button
-                    csv = results_df.to_csv(index=False)
-                    st.download_button(
-                        label="⬇️ **DOWNLOAD FULL RESULTS**",
-                        data=csv,
-                        file_name=f"enhanced_vader_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv",
-                        help="Download complete analysis results as CSV"
-                    )
-                    
-                    # Visualizations
-                    st.markdown("## 📈 **Batch Analysis Visualizations**")
-                    
-                    # Add model comparison legend
-                    create_unified_legend(analyzer, chart_type="model_comparison")
-                    
-                    # Create tabs for different visualizations
-                    viz_tab1, viz_tab2 = st.tabs(["📊 Distribution", "🤝 Agreement"])
-                    
-                    with viz_tab1:
-                        fig = go.Figure()
-                        
-                        for model, col, color in [
-                            ("TextBlob", "TextBlob", analyzer.color_scheme["models"]["TextBlob"]),
-                            ("Base VADER", "VADER_Base", analyzer.color_scheme["models"]["VADER (Base)"]),
-                            ("Enhanced VADER", "VADER_Enhanced", analyzer.color_scheme["models"]["VADER (Enhanced)"])
-                        ]:
-                            counts = results_df[col].value_counts()
-                            fig.add_trace(go.Bar(
-                                x=counts.index,
-                                y=counts.values,
-                                name=model,
-                                marker_color=color,
-                                text=counts.values,
-                                textposition='auto',
-                                hovertemplate=f'<b>{model}</b><br>%{{x}}: %{{y}}<extra></extra>'
-                            ))
-                        
-                        fig.update_layout(
-                            title="Prediction Distribution by Model",
-                            xaxis_title="Sentiment",
-                            yaxis_title="Count",
-                            barmode='group',
-                            height=500,
-                            plot_bgcolor='white',
-                            paper_bgcolor='white'
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-        
-        except Exception as e:
-            st.error(f"❌ **Error loading file:** {str(e)}")
 
-# ==========================
-# PERFORMANCE TAB - USING STREAMLIT COMPONENTS
-# ==========================
-def create_performance_tab(analyzer):
-    """Performance comparison tab"""
-    st.markdown("## 📈 Performance Metrics")
+    st.info(
+        "For batch *performance* (accuracy/F1), upload a CSV that contains a gold label column.\n\n"
+        "- Minimal columns: `text`\n"
+        "- For metrics: `text`, `gold_label` (gold_label in {negative, neutral, positive})"
+    )
+
+    uploaded_file = st.file_uploader("Upload CSV or TXT", type=["csv", "txt"])
+
+    if not uploaded_file:
+        return
+
+    try:
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            content = StringIO(uploaded_file.getvalue().decode("utf-8"))
+            lines = [line.strip() for line in content if line.strip()]
+            df = pd.DataFrame({"text": lines})
+
+        st.success(f"✅ Loaded {len(df):,} records.")
+        st.dataframe(df.head(10), use_container_width=True)
+
+        text_col = st.selectbox("Select text column:", df.columns.tolist(), index=0)
+
+        has_gold = "gold_label" in df.columns
+        if has_gold:
+            st.success("✅ Detected `gold_label` column — metrics will be computed.")
+        else:
+            st.warning("No `gold_label` column detected — will only generate predictions (no accuracy/F1).")
+
+        if st.button("🚀 ANALYZE BATCH", type="primary", use_container_width=True):
+            results = []
+            progress = st.progress(0)
+            for i, t in enumerate(df[text_col].astype(str).tolist()):
+                results.append(analyzer.analyze_text(t))
+                progress.progress((i + 1) / len(df))
+
+            out = pd.DataFrame(results)
+            st.success("🎉 Batch analysis complete.")
+            st.dataframe(out.head(50), use_container_width=True)
+
+            # Optional: compute metrics if gold exists
+            if has_gold:
+                gold = df["gold_label"].astype(str).str.lower().str.strip()
+                # Basic sanity cleaning
+                gold = gold.replace({"pos": "positive", "neg": "negative", "neu": "neutral"})
+                valid = gold.isin(["negative", "neutral", "positive"])
+                gold = gold[valid]
+                out_valid = out.loc[valid].copy()
+
+                def acc(y_true, y_pred):
+                    return float((y_true.values == y_pred.values).mean()) if len(y_true) else 0.0
+
+                # Simple per-model accuracy (since sklearn not needed here)
+                acc_tb = acc(gold, out_valid["TextBlob"])
+                acc_vb = acc(gold, out_valid["VADER_Base"])
+                acc_ve = acc(gold, out_valid["VADER_Enhanced"])
+
+                st.markdown("### 📈 Batch Accuracy (from your uploaded gold labels)")
+                met1, met2, met3 = st.columns(3)
+                met1.metric("TextBlob Accuracy", f"{acc_tb:.3f}")
+                met2.metric("VADER (Base) Accuracy", f"{acc_vb:.3f}")
+                met3.metric("VADER (Enhanced) Accuracy", f"{acc_ve:.3f}")
+
+            # Download
+            csv = out.to_csv(index=False)
+            st.download_button(
+                label="⬇️ DOWNLOAD RESULTS CSV",
+                data=csv,
+                file_name=f"sentiment_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+    except Exception as e:
+        st.error(f"❌ Error: {str(e)}")
+
+
+def create_performance_tab(analyzer: EnhancedVADERPipeline):
+    st.markdown("## 📈 Performance Metrics (Dataset-level)")
     st.markdown("---")
-    
-    # Add model comparison legend
-    create_unified_legend(analyzer, chart_type="model_comparison")
-    
-    # Add performance metric legend
-    create_unified_legend(analyzer, chart_type="performance")
-    
-    # Actual results from your pipeline
-    performance_data = {
-        'Model': ['TextBlob', 'VADER (Base)', 'VADER (Enhanced)'],
-        'Accuracy': [0.502, 0.540, 0.556],
-        'Macro F1': [0.471, 0.530, 0.542],
-        'Negative F1': [0.349, 0.485, 0.488],
-        'Positive F1': [0.512, 0.543, 0.561],
-    }
-    
-    perf_df = pd.DataFrame(performance_data)
-    
-    # Display metrics with enhanced styling
-    st.markdown("### 🎯 **Test Set Performance (n=5,055)**")
-    
-    # Create styled dataframe
-    styled_df = perf_df.style.format({
-        'Accuracy': '{:.3f}',
-        'Macro F1': '{:.3f}',
-        'Negative F1': '{:.3f}',
-        'Positive F1': '{:.3f}'
-    }).apply(lambda x: ['background: linear-gradient(90deg, #06D6A0 0%, #04b586 100%); color: white' 
-                       if x.name == 'VADER (Enhanced)' else '' for i in x], axis=1)
-    
-    st.dataframe(styled_df, use_container_width=True, height=200)
-    
-    # Performance visualization
-    st.markdown("### 📊 **Performance Comparison**")
-    
-    # Create interactive radar chart
-    categories = ['Accuracy', 'Macro F1', 'Negative F1', 'Positive F1']
-    
-    fig = go.Figure()
-    
-    for idx, model in enumerate(perf_df['Model']):
-        values = perf_df.loc[idx, categories].tolist()
-        values += values[:1]  # Close the radar
-        
-        # Use model colors for radar chart (differentiating models)
-        model_colors = analyzer.color_scheme["models"]
-        line_color = model_colors[model]
-        
-        fig.add_trace(go.Scatterpolar(
-            r=values,
-            theta=categories + [categories[0]],
-            name=model,
-            fill='toself',
-            line_color=line_color,
-            fillcolor=line_color.replace(')', ', 0.3)').replace('rgb', 'rgba'),
-            opacity=0.7
-        ))
-    
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 1]
-            )),
-        showlegend=True,
-        height=500,
-        title="Performance Radar Chart",
-        plot_bgcolor='white',
-        paper_bgcolor='white'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Improvement metrics
-    st.markdown("### 📈 **Performance Improvements**")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        improvement = (0.556 - 0.540) / 0.540 * 100
-        with st.container():
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown("### 🎯 Accuracy")
-            st.markdown(f"<h1 style='color: #667eea; font-size: 2.5rem; text-align: center;'>+{improvement:.1f}%</h1>", unsafe_allow_html=True)
-            st.write("**vs Base VADER**")
-            st.write(f"**Enhanced:** 55.6%")
-            st.write(f"**Base VADER:** 54.0%")
-            st.write(f"**TextBlob:** 50.2%")
-            st.markdown('</div>', unsafe_allow_html=True)
 
-# ==========================
-# MAIN APP
-# ==========================
+    create_unified_legend(analyzer, "model_comparison")
+
+    # Your pipeline results (static by design)
+    perf_df = pd.DataFrame(
+        {
+            "Model": ["TextBlob", "VADER (Base)", "VADER (Enhanced)"],
+            "Accuracy": [0.502, 0.540, 0.556],
+            "Macro F1": [0.471, 0.530, 0.542],
+            "Negative F1": [0.349, 0.485, 0.488],
+            "Positive F1": [0.512, 0.543, 0.561],
+        }
+    )
+
+    st.markdown("### 🎯 Test Set Performance (n=5,055)")
+    st.dataframe(perf_df, use_container_width=True)
+
+    # Bar chart (static, correct place)
+    st.markdown("### 📊 Performance Comparison (Static)")
+    categories = ["Accuracy", "Macro F1", "Negative F1", "Positive F1"]
+
+    fig = go.Figure()
+    for i, row in perf_df.iterrows():
+        fig.add_trace(
+            go.Bar(
+                name=row["Model"],
+                x=categories,
+                y=[row[c] for c in categories],
+            )
+        )
+    fig.update_layout(
+        barmode="group",
+        height=450,
+        yaxis_title="Score",
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        title="Pipeline Metrics (Static Reference)",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# =========================================================
+# MAIN
+# =========================================================
 def main():
-    """Main Streamlit app"""
-    # Initialize analyzer
     analyzer = EnhancedVADERPipeline()
-    
-    # Create wow header
+
     create_wow_header()
-    
-    # Add some spacing
     st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Create tabs
-    tab1, tab2, tab3 = st.tabs([
-        "🔍 Live Analysis", 
-        "📊 Batch Analysis", 
-        "📈 Performance"
-    ])
-    
+
+    tab1, tab2, tab3 = st.tabs(["🔍 Live Analysis", "📊 Batch Analysis", "📈 Performance"])
+
     with tab1:
         create_single_analysis_tab(analyzer)
-    
+
     with tab2:
         create_batch_analysis_tab(analyzer)
-    
+
     with tab3:
         create_performance_tab(analyzer)
 
+
 if __name__ == "__main__":
     main()
+ 
