@@ -163,13 +163,13 @@ st.markdown(
         font-weight: 800 !important;
         margin: 2px !important;
         border: 1px solid rgba(0,0,0,0.06);
+        white-space: nowrap;
     }
     .badge-green { background: rgba(6,214,160,0.16) !important; color: #047a5b !important; }
     .badge-blue  { background: rgba(17,138,178,0.16) !important; color: #0a5a73 !important; }
     .badge-red   { background: rgba(239,71,111,0.16) !important; color: #9e1638 !important; }
     .badge-yellow{ background: rgba(255,209,102,0.22) !important; color: #7a5a00 !important; }
     .badge-purple{ background: rgba(118,75,162,0.16) !important; color: #4d2f73 !important; }
-
     .badge-fire  { background: rgba(255,154,118,0.22) !important; color: #b33b12 !important; }
 
     .sentence-card {
@@ -199,14 +199,14 @@ st.markdown(
 # =========================================================
 class EnhancedVADERPipeline:
     """
-    Upgrades:
-    - Phrase activation for multi-word lexicon entries via tokenization
+    Enhancements:
+    - Phrase-aware lexicon via tokenization (multi-word phrases -> underscored tokens)
     - Sentence dominance using max |compound*weight| + blended final score
-    - Robust sarcasm:
+    - Sarcasm handling:
         * sarcasm cues (yeah right / as if)
         * tail-not flip (... not!)
-        * NEW: sarcastic praise + negative event ("Love how it dies every morning")
-    - Full trace for explainability
+        * sarcastic praise + negative event (e.g., "Love how it dies every morning")
+    - Full trace for explainability + rule activation metadata
     """
 
     def __init__(self):
@@ -220,13 +220,13 @@ class EnhancedVADERPipeline:
             "strong_pos_thr": 0.45,
         }
 
-        # dominance blending factor
+        # dominance blending factor: 0 = weighted avg only, 1 = dominant sentence only
         self.alpha = 0.70
 
         self.phrase_map = {}
         self._load_enhanced_lexicon()
 
-        # Offline benchmark – static reference metrics
+        # Offline benchmark – fixed reference metrics (industry-standard: show your evaluated results as reference)
         self.benchmark_metrics = {
             "TextBlob": {"Accuracy": 0.502, "Macro F1": 0.471, "Negative F1": 0.349},
             "VADER (Base)": {"Accuracy": 0.540, "Macro F1": 0.530, "Negative F1": 0.485},
@@ -246,7 +246,7 @@ class EnhancedVADERPipeline:
             },
         }
 
-        # NEW: sarcastic praise triggers
+        # Sarcastic praise triggers
         self.sarcastic_praise_patterns = [
             r"(?i)\b(love)\s+(how|when)\b",
             r"(?i)\bjust\s+love\s+(how|when)\b",
@@ -256,7 +256,7 @@ class EnhancedVADERPipeline:
             r"(?i)\bso\s+glad\s+(that|how|when)\b",
         ]
 
-        # NEW: negative event / failure cues (expandable)
+        # Negative event / failure cues
         self.negative_event_patterns = [
             r"(?i)\b(die|dies|died|dying)\b",
             r"(?i)\b(won'?t\s+start|won'?t\s+work|doesn'?t\s+start|doesn'?t\s+work)\b",
@@ -350,7 +350,7 @@ class EnhancedVADERPipeline:
         self.sia_enh.lexicon.update({k.lower(): v for k, v in general_lexicon.items()})
         self.sia_enh.lexicon.update(sarcasm_tokens)
 
-        # OPTIONAL: reinforce failure words (helps on short texts)
+        # reinforce failure words (helps short sarcastic texts)
         self.sia_enh.lexicon.update({
             "dies": -2.6,
             "die": -2.6,
@@ -400,7 +400,6 @@ class EnhancedVADERPipeline:
     def _has_positive_clause(self, comps: np.ndarray) -> bool:
         return bool((comps >= 0.20).any())
 
-    # NEW: sarcastic praise + negative event
     def _sarcastic_praise_negative_event(self, raw_text: str):
         t = raw_text.strip()
 
@@ -417,6 +416,19 @@ class EnhancedVADERPipeline:
             "Negative event/failure cue detected (e.g., dies/breaks/fails/crashes/won't start)",
         ]
         return True, reasons
+
+    # -------------------------
+    # Phrase hit extractor (for explainability)
+    # -------------------------
+    def _extract_phrase_hits(self, text_proc: str, max_hits: int = 8):
+        # hits are underscored tokens that are in enhanced lexicon (best-effort, explainability only)
+        toks = set(re.findall(r"\b[a-zA-Z_]+\b", text_proc.lower()))
+        hits = []
+        for t in toks:
+            if "_" in t and t in self.sia_enh.lexicon:
+                hits.append(t)
+        hits = sorted(hits)[:max_hits]
+        return hits
 
     # -------------------------
     # Baselines
@@ -473,6 +485,8 @@ class EnhancedVADERPipeline:
                     "sarcasm_reasons": [],
                     "raw_text": raw_text,
                     "text_proc": text_proc,
+                    "rule_flags": {},
+                    "phrase_hits": [],
                 }
                 return ("neutral", details) if return_scores else "neutral"
 
@@ -531,7 +545,7 @@ class EnhancedVADERPipeline:
             else:
                 label = "neutral"
 
-            # sarcasm upgrades (existing)
+            # sarcasm upgrades
             has_cue = self._has_sarcasm_cue(text_proc)
             has_tail = self._has_tail_not(raw_text)
             has_pos_clause = self._has_positive_clause(comps)
@@ -558,16 +572,17 @@ class EnhancedVADERPipeline:
                 dominance_rule = dominance_rule + " + sarcasm_cue_flip"
                 sarcasm_reasons.append("Flip applied: sarcasm cue overrides")
 
-            # NEW: sarcastic praise + negative event (your case)
+            # NEW: sarcastic praise + negative event
             praise_event_hit, praise_event_reasons = self._sarcastic_praise_negative_event(raw_text)
             if praise_event_hit:
                 sarcasm_badge = True
                 sarcasm_reasons.extend(praise_event_reasons)
-                # strong negative override: we want this to be reliably negative
                 final_score = -max(0.45, abs(final_score), 0.45)
                 label = "negative"
                 dominance_rule = dominance_rule + " + sarcastic_praise_negative_event_flip"
                 sarcasm_reasons.append("Flip applied: sarcastic praise + negative event")
+
+            phrase_hits = self._extract_phrase_hits(text_proc, max_hits=10)
 
             details = {
                 "final_score": float(final_score),
@@ -580,9 +595,17 @@ class EnhancedVADERPipeline:
                 "sentence_scores": sentence_details,
                 "num_sentences": int(len(sentences)),
                 "sarcasm_badge": bool(sarcasm_badge),
-                "sarcasm_reasons": sarcasm_reasons[:8],
+                "sarcasm_reasons": sarcasm_reasons[:10],
                 "raw_text": raw_text,
                 "text_proc": text_proc,
+                "phrase_hits": phrase_hits,
+                "rule_flags": {
+                    "sentence_dominance": True,
+                    "tail_not": bool(has_tail),
+                    "sarcasm_cue": bool(has_cue),
+                    "sarcastic_praise_neg_event": bool(praise_event_hit),
+                    "phrase_lexicon_hit": bool(len(phrase_hits) > 0),
+                },
             }
 
             return (label, details) if return_scores else label
@@ -638,12 +661,11 @@ def create_hero_header():
       Real-time, explainable sentiment analysis with phrase-aware lexicon intelligence, sentence dominance, and sarcasm handling.
     </div>
     <div class="hero-row">
-      <span class="pill">🧠 Explainable Decisions</span>
-      <span class="pill">🧾 Sentence Dominance</span>
       <span class="pill">🧩 Phrase-Aware Lexicon</span>
-      <span class="pill">🔥 Sarcasm Handling</span>
-      <span class="pill">✅ Sarcastic Praise Fix</span>
-      <span class="pill">📊 Offline Benchmark Reference</span>
+      <span class="pill">🧾 Sentence Dominance</span>
+      <span class="pill">🔥 Sarcasm Rules</span>
+      <span class="pill">🧠 Explainability Trace</span>
+      <span class="pill">📊 Benchmark Reference</span>
     </div>
   </div>
 </div>
@@ -658,6 +680,12 @@ def sentiment_badge(label: str):
     if label == "negative":
         return '<span class="badge badge-red">NEGATIVE</span>'
     return '<span class="badge badge-yellow">NEUTRAL</span>'
+
+
+def safe_sentiment(label: str):
+    if label not in ("positive", "neutral", "negative"):
+        return "neutral"
+    return label
 
 
 def create_sentence_breakdown(sentence_details, dominant_index: int):
@@ -700,16 +728,14 @@ def create_sentence_breakdown(sentence_details, dominant_index: int):
         st.markdown("</div>", unsafe_allow_html=True)
 
 
-def live_score_chart(result, analyzer):
-    st.markdown("### 📌 Live Score Comparison (Current Text)")
+# =========================================================
+# CLEAN PLOTLY VISUALS (NO CLUTTER)
+# =========================================================
+def chart_live_scores(result, analyzer):
     df = pd.DataFrame(
         {
             "Model": ["TextBlob", "VADER (Base)", "VADER (Enhanced)"],
-            "Score": [
-                result["textblob_score"],
-                result["vader_base_score"],
-                result["vader_enhanced_score"],
-            ],
+            "Score": [result["textblob_score"], result["vader_base_score"], result["vader_enhanced_score"]],
         }
     )
 
@@ -725,26 +751,23 @@ def live_score_chart(result, analyzer):
                     analyzer.color_scheme["models"]["VADER (Base)"],
                     analyzer.color_scheme["models"]["VADER (Enhanced)"],
                 ],
+                hovertemplate="<b>%{x}</b><br>Score: %{y:.3f}<extra></extra>",
             )
         ]
     )
     fig.update_layout(
-        title="Live Polarity / Compound Score (Updates Per Input)",
+        title="Live Score Comparison (Updates Per Input)",
         yaxis_title="Score (TextBlob polarity, VADER compound/final)",
         yaxis_range=[-1, 1],
         height=360,
         plot_bgcolor="white",
         paper_bgcolor="white",
+        margin=dict(l=20, r=20, t=55, b=20),
     )
     st.plotly_chart(fig, use_container_width=True)
 
 
-def benchmark_metrics_chart(analyzer):
-    st.markdown("### 🏁 Offline Benchmark Performance (Reference)")
-    st.caption(
-        "These are fixed offline test-set results (static reference). "
-        "They do not change with each new input text."
-    )
+def chart_benchmark_metrics(analyzer):
     df = pd.DataFrame([{ "Model": m, **vals } for m, vals in analyzer.benchmark_metrics.items()])
 
     fig = go.Figure()
@@ -752,28 +775,257 @@ def benchmark_metrics_chart(analyzer):
     colors = ["#4ECDC4", "#FF6B6B", "#95E1D3"]
 
     for metric, color in zip(metrics, colors):
-        fig.add_trace(go.Bar(
-            name=metric,
-            x=df["Model"],
-            y=df[metric],
-            text=[f"{v:.3f}" for v in df[metric]],
-            textposition="auto",
-            marker_color=color,
-        ))
+        fig.add_trace(
+            go.Bar(
+                name=metric,
+                x=df["Model"],
+                y=df[metric],
+                text=[f"{v:.3f}" for v in df[metric]],
+                textposition="auto",
+                marker_color=color,
+                hovertemplate=f"<b>%{{x}}</b><br>{metric}: %{{y:.3f}}<extra></extra>",
+            )
+        )
 
     fig.update_layout(
         barmode="group",
         height=420,
-        title="Accuracy, Macro-F1, Negative-F1 (Offline Benchmark)",
+        title="Offline Benchmark Performance (Reference)",
         yaxis_title="Score",
         yaxis_range=[0, 0.7],
         plot_bgcolor="white",
         paper_bgcolor="white",
         legend=dict(orientation="h", y=1.02, x=0.5, xanchor="center"),
+        margin=dict(l=20, r=20, t=60, b=20),
     )
     st.plotly_chart(fig, use_container_width=True)
 
 
+def chart_sentence_dominance_waterfall(details, analyzer):
+    sent_scores = details.get("sentence_scores", [])
+    if not sent_scores:
+        st.info("No sentence scores available.")
+        return
+
+    dom_idx = int(details.get("dominant_sentence_index", 0))
+    alpha = float(details.get("alpha", 0.7))
+    final_score = float(details.get("final_score", 0.0))
+    weighted_avg = float(details.get("weighted_avg", 0.0))
+
+    labels = []
+    weighted_vals = []
+    colors = []
+
+    for i, s in enumerate(sent_scores):
+        labels.append(f"S{i+1}")
+        weighted_vals.append(float(s.get("weighted_compound", 0.0)))
+        if i == dom_idx:
+            colors.append("#764ba2")  # dominant highlight
+        else:
+            # color by sign of weighted contribution
+            colors.append("#06D6A0" if float(s.get("weighted_compound", 0.0)) >= 0 else "#EF476F")
+
+    df = pd.DataFrame({"Sentence": labels, "WeightedContribution": weighted_vals})
+
+    # A clean bar view (less confusing than Plotly Waterfall for many users)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=df["Sentence"],
+            y=df["WeightedContribution"],
+            marker_color=colors,
+            text=[f"{v:.3f}" for v in df["WeightedContribution"]],
+            textposition="auto",
+            hovertemplate="Sentence %{x}<br>Weighted contribution: %{y:.3f}<extra></extra>",
+        )
+    )
+
+    # Reference lines
+    fig.add_hline(y=0, line_width=2, line_dash="solid", line_color="rgba(0,0,0,0.35)")
+    fig.add_hline(
+        y=final_score,
+        line_width=3,
+        line_dash="dash",
+        line_color="#06D6A0" if final_score >= 0 else "#EF476F",
+        annotation_text=f"Final score = {final_score:.3f}",
+        annotation_position="top right",
+    )
+    fig.add_hline(
+        y=weighted_avg,
+        line_width=2,
+        line_dash="dot",
+        line_color="#118AB2",
+        annotation_text=f"Weighted avg = {weighted_avg:.3f}",
+        annotation_position="bottom right",
+    )
+
+    fig.update_layout(
+        title=f"Sentence Dominance Contributions (dominant sentence highlighted) — alpha={alpha:.2f}",
+        xaxis_title="Sentence index",
+        yaxis_title="Weighted compound (compound × weight)",
+        height=420,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        margin=dict(l=20, r=20, t=65, b=20),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Purple bar = dominant sentence (max |compound × weight|). Dashed line = final score; dotted line = weighted average.")
+
+
+def chart_threshold_gauge(details, analyzer):
+    score = float(details.get("final_score", 0.0))
+    neg_thr = float(analyzer.thresholds["neg_thr"])
+    pos_thr = float(analyzer.thresholds["pos_thr"])
+
+    fig = go.Figure(
+        go.Indicator(
+            mode="gauge+number+delta",
+            value=score,
+            delta={"reference": 0.0},
+            number={"valueformat": ".3f"},
+            gauge={
+                "axis": {"range": [-1, 1]},
+                "bar": {"color": "#764ba2"},
+                "steps": [
+                    {"range": [-1, neg_thr], "color": "rgba(239,71,111,0.25)"},
+                    {"range": [neg_thr, pos_thr], "color": "rgba(255,209,102,0.35)"},
+                    {"range": [pos_thr, 1], "color": "rgba(6,214,160,0.25)"},
+                ],
+                "threshold": {
+                    "line": {"color": "rgba(0,0,0,0.65)", "width": 4},
+                    "thickness": 0.8,
+                    "value": score,
+                },
+            },
+            title={"text": f"Enhanced VADER Threshold Gauge (neg≤{neg_thr:.2f}, pos≥{pos_thr:.2f})"},
+        )
+    )
+
+    fig.update_layout(
+        height=360,
+        margin=dict(l=20, r=20, t=70, b=20),
+        paper_bgcolor="white",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def chart_score_vs_thresholds(result, analyzer):
+    # Plot scores on a single axis with decision boundaries (using enhanced thresholds as reference)
+    neg_thr = float(analyzer.thresholds["neg_thr"])
+    pos_thr = float(analyzer.thresholds["pos_thr"])
+
+    df = pd.DataFrame(
+        {
+            "Model": ["TextBlob", "VADER (Base)", "VADER (Enhanced)"],
+            "Score": [result["textblob_score"], result["vader_base_score"], result["vader_enhanced_score"]],
+        }
+    )
+
+    fig = go.Figure()
+
+    for _, row in df.iterrows():
+        model = row["Model"]
+        score = float(row["Score"])
+        color = analyzer.color_scheme["models"][model]
+
+        fig.add_trace(
+            go.Scatter(
+                x=[score],
+                y=[model],
+                mode="markers+text",
+                marker=dict(size=14, color=color),
+                text=[f"{score:.3f}"],
+                textposition="middle right",
+                hovertemplate=f"<b>{model}</b><br>Score: {score:.3f}<extra></extra>",
+                showlegend=False,
+            )
+        )
+
+    # Threshold lines
+    fig.add_vline(x=neg_thr, line_width=2, line_dash="dash", line_color="rgba(239,71,111,0.7)",
+                  annotation_text=f"neg_thr={neg_thr:.2f}", annotation_position="top left")
+    fig.add_vline(x=pos_thr, line_width=2, line_dash="dash", line_color="rgba(6,214,160,0.7)",
+                  annotation_text=f"pos_thr={pos_thr:.2f}", annotation_position="top right")
+    fig.add_vline(x=0.0, line_width=1, line_dash="dot", line_color="rgba(0,0,0,0.35)")
+
+    fig.update_layout(
+        title="Scores vs Decision Boundaries (Enhanced thresholds as reference)",
+        xaxis_title="Score",
+        xaxis=dict(range=[-1, 1]),
+        yaxis_title="Model",
+        height=320,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        margin=dict(l=20, r=20, t=60, b=20),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("This view helps you explain *why* a score becomes Negative/Neutral/Positive under your tuned thresholds.")
+
+
+def chart_rule_activation(details, analyzer):
+    flags = details.get("rule_flags", {}) or {}
+    phrase_hits = details.get("phrase_hits", []) or []
+    dominance_rule = details.get("dominance_rule", "unknown")
+
+    # Badge row (clean + readable)
+    badges = []
+    if flags.get("phrase_lexicon_hit", False):
+        badges.append('<span class="badge badge-purple">Phrase Lexicon Hit</span>')
+    if flags.get("sentence_dominance", False):
+        badges.append('<span class="badge badge-blue">Sentence Dominance</span>')
+    if flags.get("sarcasm_cue", False):
+        badges.append('<span class="badge badge-fire">Sarcasm Cue</span>')
+    if flags.get("tail_not", False):
+        badges.append('<span class="badge badge-fire">Tail-not</span>')
+    if flags.get("sarcastic_praise_neg_event", False):
+        badges.append('<span class="badge badge-fire">Sarcastic Praise + Neg Event</span>')
+
+    if badges:
+        st.markdown(" ".join(badges), unsafe_allow_html=True)
+    else:
+        st.markdown('<span class="badge badge-yellow">No special rule activated</span>', unsafe_allow_html=True)
+
+    st.info(f"**Rule Path:** `{dominance_rule}`")
+
+    if phrase_hits:
+        st.write("**Detected phrase tokens (from enhanced lexicon):**")
+        st.write(", ".join([f"`{p}`" for p in phrase_hits]))
+
+    # Minimal “activation timeline” as a horizontal bar chart (0/1)
+    keys = ["phrase_lexicon_hit", "sentence_dominance", "sarcasm_cue", "tail_not", "sarcastic_praise_neg_event"]
+    labels = ["Phrase lexicon", "Sentence dominance", "Sarcasm cue", "Tail-not", "Sarcastic praise+event"]
+    vals = [1 if flags.get(k, False) else 0 for k in keys]
+    colors = ["#764ba2", "#118AB2", "#FF9A76", "#FF9A76", "#FF9A76"]
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=vals,
+                y=labels,
+                orientation="h",
+                marker_color=colors,
+                text=vals,
+                textposition="auto",
+                hovertemplate="%{y}: %{x}<extra></extra>",
+            )
+        ]
+    )
+    fig.update_layout(
+        title="Rule Activation (1 = triggered, 0 = not triggered)",
+        xaxis=dict(range=[0, 1], tickvals=[0, 1]),
+        height=300,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        margin=dict(l=20, r=20, t=60, b=20),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# =========================================================
+# EXPLAINABILITY PANEL (TEXT)
+# =========================================================
 def explainability_panel(result, analyzer, show_debug=False):
     details = result.get("vader_enhanced_details", {}) or {}
     if not details:
@@ -789,6 +1041,7 @@ def explainability_panel(result, analyzer, show_debug=False):
 
     sarcasm_badge = bool(details.get("sarcasm_badge", False))
     sarcasm_reasons = details.get("sarcasm_reasons", [])
+    phrase_hits = details.get("phrase_hits", [])
 
     st.markdown("### 🔬 Enhanced VADER Explainability")
     cols = st.columns(5)
@@ -800,10 +1053,14 @@ def explainability_panel(result, analyzer, show_debug=False):
 
     if sarcasm_badge:
         st.markdown('<span class="badge badge-fire">🔥 Sarcasm Triggered</span>', unsafe_allow_html=True)
-        for r in sarcasm_reasons[:6]:
+        for r in sarcasm_reasons[:8]:
             st.write(f"• {r}")
     else:
-        st.markdown('<span class="badge badge-blue">No sarcasm rule triggered</span>', unsafe_allow_html=True)
+        st.markdown('<span class="badge badge-blue">No sarcasm flip applied</span>', unsafe_allow_html=True)
+
+    if phrase_hits:
+        st.markdown('<span class="badge badge-purple">🧩 Phrase lexicon activated</span>', unsafe_allow_html=True)
+        st.write(", ".join([f"`{p}`" for p in phrase_hits]))
 
     st.info(f"**Rule Path:** `{rule}`  |  **Dominant Sentence:** {dom_idx + 1} (1-based)")
 
@@ -815,6 +1072,8 @@ def explainability_panel(result, analyzer, show_debug=False):
             st.code(details.get("text_proc", ""), language="text")
             st.write("**Thresholds:**")
             st.json(analyzer.thresholds)
+            st.write("**Rule flags:**")
+            st.json(details.get("rule_flags", {}))
 
 
 # =========================================================
@@ -826,10 +1085,10 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline, focus_mode=False
 
     examples = {
         "🎯 Select an example...": "",
-        "🧪 Sarcastic Praise (NEW FIX)": "Love how the engine dies every morning.",
+        "🧪 Sarcastic Praise (Fix)": "Love how the engine dies every morning.",
         "🐦 Sarcasm Tail Not": "Yeah right, like this product is gonna last more than a week. Amazing quality... not!",
         "🚗 Car Review (Mixed)": "The engine performance is absolutely terrible and unreliable. However, the seats are surprisingly comfortable and the fuel economy is excellent.",
-        "💰 Finance News (Complex)": "Market crashed by 15% today due to economic concerns. However, analysts remain optimistic about long-term recovery prospects.",
+        "💰 Finance (Complex)": "Market crashed by 15% today due to economic concerns. However, analysts remain optimistic about long-term recovery prospects.",
         "😠 Strong Negative": "This is the worst service I've ever experienced. Absolutely unacceptable and a complete waste of money!",
         "😊 Strong Positive": "Absolutely fantastic product! Exceeded all expectations and the customer service was brilliant!",
     }
@@ -859,11 +1118,11 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline, focus_mode=False
         show_debug = st.toggle("Show debug/validation", value=False)
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-        st.markdown("### 🔎 Model Features")
+        st.markdown("### 🔎 Features")
         st.write("✅ Phrase-aware lexicon")
         st.write("✅ Sentence dominance + emphasis weighting")
-        st.write("✅ Sarcasm handling (cues + tail-not flip)")
-        st.write("✅ Sarcastic praise + negative event (NEW)")
+        st.write("✅ Sarcasm rules (cue + tail-not)")
+        st.write("✅ Sarcastic praise + negative event")
         st.write("✅ Explainability trace")
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -871,7 +1130,9 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline, focus_mode=False
     analyze_btn = st.button("🚀 ANALYZE SENTIMENT", type="primary", use_container_width=True)
     if not analyze_btn:
         if show_benchmark and not focus_mode:
-            benchmark_metrics_chart(analyzer)
+            st.markdown("### 🏁 Offline Benchmark Performance (Reference)")
+            st.caption("Static evaluation results from your test set — shown as a professional reference baseline.")
+            chart_benchmark_metrics(analyzer)
         return
 
     if not text.strip():
@@ -911,22 +1172,48 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline, focus_mode=False
         details = result.get("vader_enhanced_details", {}) or {}
         if details.get("sarcasm_badge", False):
             st.markdown('<span class="badge badge-fire">🔥 Sarcasm Triggered</span>', unsafe_allow_html=True)
+        if details.get("phrase_hits", []):
+            st.markdown('<span class="badge badge-purple">🧩 Phrase Hit</span>', unsafe_allow_html=True)
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-    live_score_chart(result, analyzer)
-
-    if show_benchmark:
-        benchmark_metrics_chart(analyzer)
-
-    explainability_panel(result, analyzer, show_debug=show_debug)
+    # -------------------------
+    # NEW: Clean visual suite in tabs (no clutter)
+    # -------------------------
+    st.markdown("## 📊 Visual Explanations")
+    vis1, vis2, vis3, vis4, vis5 = st.tabs(
+        ["Live Scores", "Sentence Dominance", "Threshold Gauge", "Decision Boundaries", "Rule Activation"]
+    )
 
     details = result.get("vader_enhanced_details", {}) or {}
-    sentence_scores = details.get("sentence_scores", [])
-    dom_idx = int(details.get("dominant_sentence_index", 0))
 
-    with st.expander("🧾 Sentence-Level Breakdown", expanded=focus_mode):
+    with vis1:
+        chart_live_scores(result, analyzer)
+        if show_benchmark:
+            with st.expander("🏁 Offline Benchmark Reference (Static)", expanded=False):
+                chart_benchmark_metrics(analyzer)
+
+    with vis2:
+        chart_sentence_dominance_waterfall(details, analyzer)
+
+    with vis3:
+        chart_threshold_gauge(details, analyzer)
+
+    with vis4:
+        chart_score_vs_thresholds(result, analyzer)
+
+    with vis5:
+        chart_rule_activation(details, analyzer)
+
+    # Explainability + sentence breakdown kept in expanders (clean screen)
+    with st.expander("🔬 Explainability Trace (Text)", expanded=not focus_mode):
+        explainability_panel(result, analyzer, show_debug=show_debug)
+
+    with st.expander("🧾 Sentence-Level Breakdown (Table-like)", expanded=False):
+        sentence_scores = details.get("sentence_scores", [])
+        dom_idx = int(details.get("dominant_sentence_index", 0))
         if sentence_scores:
             create_sentence_breakdown(sentence_scores, dominant_index=dom_idx)
         else:
@@ -936,7 +1223,6 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline, focus_mode=False
 def create_batch_analysis_tab(analyzer: EnhancedVADERPipeline):
     st.markdown("## 📊 Batch File Analysis")
     st.markdown("---")
-
     st.info("Upload CSV/TXT for batch predictions. For CSV, select the correct text column.")
 
     uploaded_file = st.file_uploader("Upload CSV or TXT", type=["csv", "txt"])
@@ -982,15 +1268,19 @@ def create_batch_analysis_tab(analyzer: EnhancedVADERPipeline):
         st.error(f"❌ Error: {str(e)}")
 
 
-def create_performance_tab(analyzer: EnhancedVADERPipeline):
+def create_benchmark_tab(analyzer: EnhancedVADERPipeline):
     st.markdown("## 📈 Offline Benchmark (Reference)")
     st.markdown("---")
-    benchmark_metrics_chart(analyzer)
+    st.caption(
+        "This is a static reference from your evaluated test set. "
+        "It is normal and professional to show this as 'benchmark performance'."
+    )
+    chart_benchmark_metrics(analyzer)
 
-    st.markdown("### 🧠 Interpreting improvements")
+    st.markdown("### 🧠 How to interpret improvements")
     st.write("• Small accuracy gains can still be meaningful on large test sets.")
-    st.write("• Negative F1 improvements matter for weak-negative + sarcasm-heavy texts.")
-    st.write("• The key value is interpretable improvement (traceable rules), not a black-box model.")
+    st.write("• Negative F1 gains matter for weak-negative + sarcasm-heavy texts.")
+    st.write("• Your contribution is interpretable improvement (rules + trace), not a black-box model.")
 
 
 # =========================================================
@@ -1002,11 +1292,10 @@ def main():
     with st.sidebar:
         st.markdown("## ⚙️ Dashboard Settings")
         focus_mode = st.toggle("Focus mode", value=True)
-
         st.markdown("---")
         st.markdown("## ℹ️ Notes")
-        st.write("Offline benchmark charts are static reference metrics from your test set evaluation.")
-        st.write("Live analysis updates per input text.")
+        st.write("Benchmark charts are static reference metrics from your offline evaluation.")
+        st.write("Live charts update per input text.")
 
     create_shell_open()
     create_hero_header()
@@ -1021,7 +1310,7 @@ def main():
         create_batch_analysis_tab(analyzer)
 
     with tab3:
-        create_performance_tab(analyzer)
+        create_benchmark_tab(analyzer)
 
 
 if __name__ == "__main__":
