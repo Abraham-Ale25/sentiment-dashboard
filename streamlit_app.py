@@ -24,7 +24,7 @@ st.set_page_config(
 
 
 # =========================================================
-# PREMIUM UI CSS (Header upgraded to multi-colour gradient hero)
+# PREMIUM UI CSS
 # =========================================================
 st.markdown(
     """
@@ -34,7 +34,6 @@ st.markdown(
         padding-top: 0 !important;
     }
 
-    /* Shell container */
     .app-shell {
         background: rgba(255,255,255,0.92);
         border-radius: 22px;
@@ -44,7 +43,6 @@ st.markdown(
         box-shadow: 0 10px 28px rgba(0,0,0,0.08);
     }
 
-    /* HERO HEADER */
     .hero-wrap {
         border-radius: 22px;
         padding: 22px 22px 18px 22px;
@@ -187,7 +185,6 @@ st.markdown(
     .sentence-card.neutral  { border-left-color: #FFD166 !important; }
     .sentence-card.positive { border-left-color: #06D6A0 !important; }
 
-    /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -202,13 +199,13 @@ st.markdown(
 # =========================================================
 class EnhancedVADERPipeline:
     """
-    Key upgrades:
-    - Phrase activation for multi-word lexicon entries via tokenization (e.g., "market crash" -> "market_crash")
+    Upgrades:
+    - Phrase activation for multi-word lexicon entries via tokenization
     - Sentence dominance using max |compound*weight| + blended final score
     - Robust sarcasm:
         * sarcasm cues (yeah right / as if)
         * tail-not flip (... not!)
-        * positive clause + tail-not => strong negative flip
+        * NEW: sarcastic praise + negative event ("Love how it dies every morning")
     - Full trace for explainability
     """
 
@@ -226,11 +223,10 @@ class EnhancedVADERPipeline:
         # dominance blending factor
         self.alpha = 0.70
 
-        # phrase replacement registry
         self.phrase_map = {}
         self._load_enhanced_lexicon()
 
-        # Offline benchmark (test set) – static reference metrics
+        # Offline benchmark – static reference metrics
         self.benchmark_metrics = {
             "TextBlob": {"Accuracy": 0.502, "Macro F1": 0.471, "Negative F1": 0.349},
             "VADER (Base)": {"Accuracy": 0.540, "Macro F1": 0.530, "Negative F1": 0.485},
@@ -250,6 +246,33 @@ class EnhancedVADERPipeline:
             },
         }
 
+        # NEW: sarcastic praise triggers
+        self.sarcastic_praise_patterns = [
+            r"(?i)\b(love)\s+(how|when)\b",
+            r"(?i)\bjust\s+love\s+(how|when)\b",
+            r"(?i)\bgotta\s+love\s+(it\s+)?when\b",
+            r"(?i)\bthanks\s+for\b",
+            r"(?i)\breally\s+appreciate\s+(how|when)\b",
+            r"(?i)\bso\s+glad\s+(that|how|when)\b",
+        ]
+
+        # NEW: negative event / failure cues (expandable)
+        self.negative_event_patterns = [
+            r"(?i)\b(die|dies|died|dying)\b",
+            r"(?i)\b(won'?t\s+start|won'?t\s+work|doesn'?t\s+start|doesn'?t\s+work)\b",
+            r"(?i)\b(break|breaks|broke|broken)\b",
+            r"(?i)\b(fail|fails|failed|failure)\b",
+            r"(?i)\b(crash|crashes|crashed|crashing)\b",
+            r"(?i)\b(stall|stalls|stalled)\b",
+            r"(?i)\b(leak|leaks|leaking)\b",
+            r"(?i)\b(overheat|overheats|overheated|overheating)\b",
+            r"(?i)\b(shut\s*down|shuts\s*down|shutting\s*down)\b",
+            r"(?i)\b(dead\s+battery|battery\s+dead)\b",
+        ]
+
+    # -------------------------
+    # Phrase tokenization utilities
+    # -------------------------
     def _register_phrases(self, phrase_scores: dict):
         for phrase in phrase_scores.keys():
             if " " in phrase.strip():
@@ -327,6 +350,24 @@ class EnhancedVADERPipeline:
         self.sia_enh.lexicon.update({k.lower(): v for k, v in general_lexicon.items()})
         self.sia_enh.lexicon.update(sarcasm_tokens)
 
+        # OPTIONAL: reinforce failure words (helps on short texts)
+        self.sia_enh.lexicon.update({
+            "dies": -2.6,
+            "die": -2.6,
+            "dead": -2.2,
+            "broken": -2.4,
+            "fails": -2.3,
+            "failed": -2.3,
+            "crashes": -2.5,
+            "crashed": -2.5,
+            "overheats": -2.2,
+            "overheated": -2.2,
+            "stalls": -2.1,
+        })
+
+    # -------------------------
+    # Sentence utilities
+    # -------------------------
     def _simple_sent_tokenize(self, text: str):
         if not text:
             return []
@@ -338,19 +379,17 @@ class EnhancedVADERPipeline:
         tokens = sentence.split()
         n = len(tokens)
 
-        # Length weight (min 1.0, max 3.0)
         len_weight = min(max(n / 8.0, 1.0), 3.0)
-
-        # Emphasis
         exclam_weight = 1.0 + min(sentence.count("!"), 3) * 0.22
         caps_words = [w for w in tokens if w.isupper() and len(w) > 2]
         caps_weight = 1.0 + min(len(caps_words), 3) * 0.16
-
-        # Contrast cue boosts importance slightly
         contrast = 1.12 if re.search(r"(?i)\bbut\b|\bhowever\b|\balthough\b", sentence) else 1.0
 
         return len_weight * exclam_weight * caps_weight * contrast
 
+    # -------------------------
+    # Sarcasm detectors
+    # -------------------------
     def _has_sarcasm_cue(self, text_proc: str) -> bool:
         t = text_proc.lower()
         return ("yeah_right" in t) or ("as_if" in t)
@@ -360,6 +399,24 @@ class EnhancedVADERPipeline:
 
     def _has_positive_clause(self, comps: np.ndarray) -> bool:
         return bool((comps >= 0.20).any())
+
+    # NEW: sarcastic praise + negative event
+    def _sarcastic_praise_negative_event(self, raw_text: str):
+        t = raw_text.strip()
+
+        praise_hit = any(re.search(p, t) for p in self.sarcastic_praise_patterns)
+        if not praise_hit:
+            return False, []
+
+        event_hits = [p for p in self.negative_event_patterns if re.search(p, t)]
+        if not event_hits:
+            return False, []
+
+        reasons = [
+            "Sarcastic praise pattern detected (e.g., 'love how/when', 'gotta love', 'thanks for')",
+            "Negative event/failure cue detected (e.g., dies/breaks/fails/crashes/won't start)",
+        ]
+        return True, reasons
 
     # -------------------------
     # Baselines
@@ -396,14 +453,6 @@ class EnhancedVADERPipeline:
     # Enhanced VADER
     # -------------------------
     def enhanced_vader_predict(self, text, return_scores=False):
-        """
-        Decision logic:
-        1) phrase tokenization activates multi-word lexicon entries
-        2) sentence compounds + weights
-        3) dominant sentence = max |compound*weight|
-        4) final score = alpha*dominant + (1-alpha)*weighted_avg
-        5) sarcasm: (tail_not + positive_clause) OR sarcasm cue => flip negative
-        """
         try:
             raw_text = str(text)
             text_proc = self._apply_phrase_tokenization(raw_text)
@@ -474,7 +523,7 @@ class EnhancedVADERPipeline:
                 final_score = dominant_comp
                 dominance_rule = "strong_positive_weighted_dominance"
 
-            # threshold to label
+            # label by thresholds
             if final_score >= self.thresholds["pos_thr"]:
                 label = "positive"
             elif final_score <= self.thresholds["neg_thr"]:
@@ -482,7 +531,7 @@ class EnhancedVADERPipeline:
             else:
                 label = "neutral"
 
-            # sarcasm upgrades
+            # sarcasm upgrades (existing)
             has_cue = self._has_sarcasm_cue(text_proc)
             has_tail = self._has_tail_not(raw_text)
             has_pos_clause = self._has_positive_clause(comps)
@@ -495,7 +544,7 @@ class EnhancedVADERPipeline:
                 sarcasm_badge = True
                 sarcasm_reasons.append("Sarcasm tail detected (... not!)")
 
-            # Flip rules
+            # Flip rules: tail-not
             if has_tail and has_pos_clause:
                 flip_mag = max(0.45, abs(dominant_comp), abs(final_score))
                 final_score = -flip_mag
@@ -509,6 +558,17 @@ class EnhancedVADERPipeline:
                 dominance_rule = dominance_rule + " + sarcasm_cue_flip"
                 sarcasm_reasons.append("Flip applied: sarcasm cue overrides")
 
+            # NEW: sarcastic praise + negative event (your case)
+            praise_event_hit, praise_event_reasons = self._sarcastic_praise_negative_event(raw_text)
+            if praise_event_hit:
+                sarcasm_badge = True
+                sarcasm_reasons.extend(praise_event_reasons)
+                # strong negative override: we want this to be reliably negative
+                final_score = -max(0.45, abs(final_score), 0.45)
+                label = "negative"
+                dominance_rule = dominance_rule + " + sarcastic_praise_negative_event_flip"
+                sarcasm_reasons.append("Flip applied: sarcastic praise + negative event")
+
             details = {
                 "final_score": float(final_score),
                 "weighted_avg": float(weighted_avg),
@@ -520,7 +580,7 @@ class EnhancedVADERPipeline:
                 "sentence_scores": sentence_details,
                 "num_sentences": int(len(sentences)),
                 "sarcasm_badge": bool(sarcasm_badge),
-                "sarcasm_reasons": sarcasm_reasons,
+                "sarcasm_reasons": sarcasm_reasons[:8],
                 "raw_text": raw_text,
                 "text_proc": text_proc,
             }
@@ -559,14 +619,12 @@ class EnhancedVADERPipeline:
 # =========================================================
 # UI HELPERS
 # =========================================================
-def create_shell_open(max_width=True):
-    if max_width:
-        st.markdown("<div class='app-shell'>", unsafe_allow_html=True)
+def create_shell_open():
+    st.markdown("<div class='app-shell'>", unsafe_allow_html=True)
 
 
-def create_shell_close(max_width=True):
-    if max_width:
-        st.markdown("</div>", unsafe_allow_html=True)
+def create_shell_close():
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def create_hero_header():
@@ -584,6 +642,7 @@ def create_hero_header():
       <span class="pill">🧾 Sentence Dominance</span>
       <span class="pill">🧩 Phrase-Aware Lexicon</span>
       <span class="pill">🔥 Sarcasm Handling</span>
+      <span class="pill">✅ Sarcastic Praise Fix</span>
       <span class="pill">📊 Offline Benchmark Reference</span>
     </div>
   </div>
@@ -684,7 +743,7 @@ def benchmark_metrics_chart(analyzer):
     st.markdown("### 🏁 Offline Benchmark Performance (Reference)")
     st.caption(
         "These are fixed offline test-set results (static reference). "
-        "They help communicate comparative performance, but they do not change with each new input text."
+        "They do not change with each new input text."
     )
     df = pd.DataFrame([{ "Model": m, **vals } for m, vals in analyzer.benchmark_metrics.items()])
 
@@ -741,7 +800,7 @@ def explainability_panel(result, analyzer, show_debug=False):
 
     if sarcasm_badge:
         st.markdown('<span class="badge badge-fire">🔥 Sarcasm Triggered</span>', unsafe_allow_html=True)
-        for r in sarcasm_reasons[:4]:
+        for r in sarcasm_reasons[:6]:
             st.write(f"• {r}")
     else:
         st.markdown('<span class="badge badge-blue">No sarcasm rule triggered</span>', unsafe_allow_html=True)
@@ -752,7 +811,7 @@ def explainability_panel(result, analyzer, show_debug=False):
         with st.expander("Debug / Validation View", expanded=False):
             st.write("**Raw text:**")
             st.code(details.get("raw_text", ""), language="text")
-            st.write("**Tokenized text (phrases + sarcasm tokens):**")
+            st.write("**Tokenized text:**")
             st.code(details.get("text_proc", ""), language="text")
             st.write("**Thresholds:**")
             st.json(analyzer.thresholds)
@@ -767,6 +826,7 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline, focus_mode=False
 
     examples = {
         "🎯 Select an example...": "",
+        "🧪 Sarcastic Praise (NEW FIX)": "Love how the engine dies every morning.",
         "🐦 Sarcasm Tail Not": "Yeah right, like this product is gonna last more than a week. Amazing quality... not!",
         "🚗 Car Review (Mixed)": "The engine performance is absolutely terrible and unreliable. However, the seats are surprisingly comfortable and the fuel economy is excellent.",
         "💰 Finance News (Complex)": "Market crashed by 15% today due to economic concerns. However, analysts remain optimistic about long-term recovery prospects.",
@@ -803,6 +863,7 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline, focus_mode=False
         st.write("✅ Phrase-aware lexicon")
         st.write("✅ Sentence dominance + emphasis weighting")
         st.write("✅ Sarcasm handling (cues + tail-not flip)")
+        st.write("✅ Sarcastic praise + negative event (NEW)")
         st.write("✅ Explainability trace")
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -824,7 +885,6 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline, focus_mode=False
             progress_bar.progress(i + 1)
         result = analyzer.analyze_text(text, return_detailed=True)
 
-    # Cards
     c1, c2, c3 = st.columns(3)
 
     with c1:
@@ -855,16 +915,13 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline, focus_mode=False
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-    # Charts
     live_score_chart(result, analyzer)
 
     if show_benchmark:
         benchmark_metrics_chart(analyzer)
 
-    # Explainability panel
     explainability_panel(result, analyzer, show_debug=show_debug)
 
-    # Sentence breakdown
     details = result.get("vader_enhanced_details", {}) or {}
     sentence_scores = details.get("sentence_scores", [])
     dom_idx = int(details.get("dominant_sentence_index", 0))
@@ -880,10 +937,7 @@ def create_batch_analysis_tab(analyzer: EnhancedVADERPipeline):
     st.markdown("## 📊 Batch File Analysis")
     st.markdown("---")
 
-    st.info(
-        "Upload CSV/TXT for batch predictions.\n\n"
-        "Tip: for CSV, ensure your text column is clean and consistently named."
-    )
+    st.info("Upload CSV/TXT for batch predictions. For CSV, select the correct text column.")
 
     uploaded_file = st.file_uploader("Upload CSV or TXT", type=["csv", "txt"])
     if not uploaded_file:
@@ -934,9 +988,9 @@ def create_performance_tab(analyzer: EnhancedVADERPipeline):
     benchmark_metrics_chart(analyzer)
 
     st.markdown("### 🧠 Interpreting improvements")
-    st.write("• A small gain in overall accuracy can be meaningful on large test sets.")
-    st.write("• Negative F1 is especially important when weak-negative and sarcasm cases are common.")
-    st.write("• The value here is interpretable improvement (traceable decisions), not a black-box model.")
+    st.write("• Small accuracy gains can still be meaningful on large test sets.")
+    st.write("• Negative F1 improvements matter for weak-negative + sarcasm-heavy texts.")
+    st.write("• The key value is interpretable improvement (traceable rules), not a black-box model.")
 
 
 # =========================================================
@@ -945,20 +999,18 @@ def create_performance_tab(analyzer: EnhancedVADERPipeline):
 def main():
     analyzer = EnhancedVADERPipeline()
 
-    # Sidebar: general-purpose controls
     with st.sidebar:
         st.markdown("## ⚙️ Dashboard Settings")
         focus_mode = st.toggle("Focus mode", value=True)
-        max_width = st.toggle("Max-width layout (recommended)", value=True)
 
         st.markdown("---")
         st.markdown("## ℹ️ Notes")
-        st.write("Offline benchmark charts are static reference metrics from your evaluation test set.")
-        st.write("Live analysis is real-time and updates per input text.")
+        st.write("Offline benchmark charts are static reference metrics from your test set evaluation.")
+        st.write("Live analysis updates per input text.")
 
-    create_shell_open(max_width=max_width)
+    create_shell_open()
     create_hero_header()
-    create_shell_close(max_width=max_width)
+    create_shell_close()
 
     tab1, tab2, tab3 = st.tabs(["🔍 Live Analysis", "📊 Batch Analysis", "📈 Benchmark"])
 
