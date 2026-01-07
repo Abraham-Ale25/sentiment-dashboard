@@ -162,21 +162,22 @@ st.markdown(
 )
 
 # =========================================================
-# ENHANCED VADER (FIXED): phrase activation + true dominance + debuggable trace
+# ENHANCED VADER (FIXED): phrase activation + true dominance + sarcasm tail flip
 # =========================================================
 class EnhancedVADERPipeline:
     """
-    Fixes:
+    Key fixes:
     1) Multi-word lexicon activation via phrase -> underscore tokenization
-    2) True dominance driven by WEIGHTED sentence polarity (compound * weight)
-    3) Live charts show per-text scores (not static dataset metrics)
+    2) Dominant sentence chosen by max |compound * weight|
+    3) Final score blends dominant + weighted average via alpha
+    4) Stronger sarcasm tail handling: "... not!" flips to NEGATIVE (not neutral)
     """
 
     def __init__(self):
         self.sia_base = SentimentIntensityAnalyzer()
         self.sia_enh = SentimentIntensityAnalyzer()
 
-        # Thresholds from your pipeline
+        # Thresholds (from your pipeline)
         self.thresholds = {
             "pos_thr": 0.30,
             "neg_thr": -0.05,
@@ -184,25 +185,25 @@ class EnhancedVADERPipeline:
             "strong_pos_thr": 0.45,
         }
 
-        # Dominance blend (0=weighted avg only, 1=dominant sentence only)
+        # Dominance blend (0=weighted avg only, 1=dominant only)
         self.alpha = 0.70
 
-        # Phrase replacement registry
+        # Phrase replacement registry (regex -> underscore token)
         self.phrase_map = {}
         self._load_enhanced_lexicon()
 
-        # Colors (kept)
+        # Reference benchmark metrics (pipeline-level) — shown during live testing as benchmark
+        self.benchmark_metrics = {
+            "TextBlob": {"Accuracy": 0.502, "Macro F1": 0.471, "Negative F1": 0.349},
+            "VADER (Base)": {"Accuracy": 0.540, "Macro F1": 0.530, "Negative F1": 0.485},
+            "VADER (Enhanced)": {"Accuracy": 0.556, "Macro F1": 0.542, "Negative F1": 0.488},
+        }
+
         self.color_scheme = {
             "models": {
                 "TextBlob": "#EF476F",
                 "VADER (Base)": "#118AB2",
                 "VADER (Enhanced)": "#06D6A0",
-            },
-            "metrics": {
-                "Accuracy": "#4ECDC4",
-                "Macro F1": "#FF6B6B",
-                "Negative F1": "#95E1D3",
-                "Positive F1": "#FFD166",
             },
             "sentiments": {
                 "negative": "#EF476F",
@@ -225,7 +226,7 @@ class EnhancedVADERPipeline:
         if not isinstance(text, str):
             text = str(text)
 
-        # Multi-word phrase -> underscored token
+        # Multi-word phrases -> underscored tokens
         for pattern, repl in self.phrase_map.items():
             text = re.sub(pattern, repl, text)
 
@@ -238,7 +239,6 @@ class EnhancedVADERPipeline:
         return text
 
     def _load_enhanced_lexicon(self):
-        # Your lexicons (same content, we will convert phrases to underscore keys)
         car_lexicon_phrases = {
             "fuel-efficient": 2.5, "fuel efficient": 2.5, "economical": 2.0,
             "overpriced": -3.0, "underpowered": -2.5, "noisy cabin": -2.5,
@@ -287,12 +287,8 @@ class EnhancedVADERPipeline:
                 out[kk] = v
             return out
 
-        car_lexicon = to_token_lexicon(car_lexicon_phrases)
-        finance_lexicon = to_token_lexicon(finance_lexicon_phrases)
-
-        # Update enhanced lexicon
-        self.sia_enh.lexicon.update(car_lexicon)
-        self.sia_enh.lexicon.update(finance_lexicon)
+        self.sia_enh.lexicon.update(to_token_lexicon(car_lexicon_phrases))
+        self.sia_enh.lexicon.update(to_token_lexicon(finance_lexicon_phrases))
         self.sia_enh.lexicon.update({k.lower(): v for k, v in general_lexicon.items()})
         self.sia_enh.lexicon.update(sarcasm_tokens)
 
@@ -323,7 +319,7 @@ class EnhancedVADERPipeline:
         return len_weight * exclam_weight * caps_weight * contrast
 
     # -------------------------
-    # Predictions
+    # Baselines
     # -------------------------
     def textblob_predict(self, text, return_scores=False):
         try:
@@ -353,16 +349,20 @@ class EnhancedVADERPipeline:
             fallback = {"compound": 0.0, "neg": 0.0, "neu": 1.0, "pos": 0.0}
             return ("neutral", fallback) if return_scores else "neutral"
 
+    # -------------------------
+    # Enhanced VADER
+    # -------------------------
+    def _has_sarcasm_tail_not(self, text: str) -> bool:
+        # Matches: " ... not!", "... not.", ", not!", "not!" at the end
+        return bool(re.search(r"(?i)(?:\.\.\.|,)?\s*not[.!?]*\s*$", text.strip()))
+
     def enhanced_vader_predict(self, text, return_scores=False):
         """
-        True dominance:
-        - Phrase tokenization so multi-word lexicon activates
-        - Dominant sentence chosen by max |compound * weight|
-        - Final score = alpha*dominant_compound + (1-alpha)*weighted_avg
-        - Strong dominance triggers use WEIGHTED dominance
+        True dominance + stronger sarcasm tail.
         """
         try:
-            text_proc = self._apply_phrase_tokenization(str(text))
+            raw_text = str(text)
+            text_proc = self._apply_phrase_tokenization(raw_text)
             sentences = self._simple_sent_tokenize(text_proc)
 
             if not sentences:
@@ -376,6 +376,7 @@ class EnhancedVADERPipeline:
                         "alpha": float(self.alpha),
                         "dominance_rule": "empty_text",
                         "sentence_scores": [],
+                        "num_sentences": 0,
                     }
                 return "neutral"
 
@@ -414,7 +415,7 @@ class EnhancedVADERPipeline:
 
             dominance_rule = "blend_dominant_vs_weighted_avg"
 
-            # Strong dominance based on WEIGHTED dominance
+            # Strong dominance triggers
             if dominant_weighted <= self.thresholds["strong_neg_thr"]:
                 final_score = dominant_comp
                 label = "negative"
@@ -433,11 +434,25 @@ class EnhancedVADERPipeline:
                 else:
                     label = "neutral"
 
-            # Tail "not!" rule (lightweight)
-            if re.search(r"(?i)\bnot[.!?]*\s*$", text_proc) and label == "positive":
-                final_score = min(final_score, 0.0)
-                label = "neutral" if final_score > self.thresholds["neg_thr"] else "negative"
-                dominance_rule = dominance_rule + " + tail_not_rule"
+            # -------------------------
+            # FIXED: Sarcasm tail "... not!" should FLIP to NEGATIVE
+            # -------------------------
+            if self._has_sarcasm_tail_not(text_proc):
+                # If there is notable positive content earlier, flip it.
+                has_positive_clause = bool((comps >= 0.20).any())
+
+                if has_positive_clause:
+                    # Make negative with meaningful magnitude (not neutral)
+                    # Use the dominant magnitude as a base; ensure at least -0.35
+                    flip_mag = max(0.35, abs(dominant_comp))
+                    final_score = -flip_mag
+                    label = "negative"
+                    dominance_rule = dominance_rule + " + sarcasm_tail_not_flip"
+                else:
+                    # If no clear positive clause, still nudge negative mildly
+                    final_score = min(final_score, -0.20)
+                    label = "negative" if final_score <= self.thresholds["neg_thr"] else "neutral"
+                    dominance_rule = dominance_rule + " + sarcasm_tail_not_nudge"
 
             if return_scores:
                 return label, {
@@ -497,50 +512,10 @@ def create_wow_header():
     with c3:
         st.markdown('<div class="badge badge-blue">🧾 Sentence Dominance</div>', unsafe_allow_html=True)
     with c4:
-        st.markdown('<div class="badge badge-red">📈 Live Score Charts</div>', unsafe_allow_html=True)
+        st.markdown('<div class="badge badge-red">📊 Live + Benchmark Charts</div>', unsafe_allow_html=True)
 
 
-def create_unified_legend(analyzer, chart_type="model_comparison"):
-    if chart_type == "model_comparison":
-        st.markdown("### 🤖 Model Legend")
-        st.markdown('<div class="legend-container">', unsafe_allow_html=True)
-        st.markdown('<div class="legend-title">Model Identification</div>', unsafe_allow_html=True)
-        models = analyzer.color_scheme["models"]
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown(
-                f"""
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: {models['TextBlob']};"></div>
-                    <span><strong>TextBlob</strong></span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col2:
-            st.markdown(
-                f"""
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: {models['VADER (Base)']};"></div>
-                    <span><strong>VADER (Base)</strong></span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with col3:
-            st.markdown(
-                f"""
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: {models['VADER (Enhanced)']};"></div>
-                    <span><strong>VADER (Enhanced)</strong></span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-
-def create_sentence_breakdown(sentence_details, analyzer):
+def create_sentence_breakdown(sentence_details, analyzer, dominant_index: int):
     for i, sent in enumerate(sentence_details, 1):
         score = sent["compound"]
         w = sent["weight"]
@@ -550,10 +525,13 @@ def create_sentence_breakdown(sentence_details, analyzer):
         card_class = f"sentence-card {sentiment}"
         badge_color = "green" if sentiment == "positive" else "red" if sentiment == "negative" else "yellow"
 
+        is_dom = (i - 1) == dominant_index
+        dom_tag = " ✅ DOMINANT" if is_dom else ""
+
         st.markdown(f"<div class='{card_class}'>", unsafe_allow_html=True)
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.write(f"**Sentence {i}:** {sent['sentence']}")
+            st.write(f"**Sentence {i}{dom_tag}:** {sent['sentence']}")
         with col2:
             st.markdown(f"<span class='badge badge-{badge_color}'>{sentiment.upper()}</span>", unsafe_allow_html=True)
 
@@ -565,7 +543,6 @@ def create_sentence_breakdown(sentence_details, analyzer):
         with c3:
             st.write(f"**Weighted:** {wc:.3f}")
 
-        # Detailed scores
         cols = st.columns(4)
         with cols[0]:
             st.metric("Neg", f"{sent['scores']['neg']:.3f}")
@@ -588,7 +565,7 @@ def create_real_time_explanation(result, analyzer):
     dom_wcomp = float(details.get("dominant_weighted_compound", 0.0))
     dominance_rule = details.get("dominance_rule", "unknown")
 
-    st.markdown("## 🔬 Real-Time Enhanced VADER Decision Trace")
+    st.markdown("## 🔬 Enhanced VADER Decision Trace (Current Text)")
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -600,12 +577,50 @@ def create_real_time_explanation(result, analyzer):
     with c4:
         st.metric("Dominant Weighted", f"{dom_wcomp:.3f}")
 
-    st.info(f"**Dominance Rule Applied:** `{dominance_rule}`")
-    st.write(f"**Dominant Sentence Index:** {dom_idx + 1} (1-based)")
+    st.info(f"**Rule Path:** `{dominance_rule}`")
+    st.write(f"**Dominant Sentence:** {dom_idx + 1} (1-based)")
 
-    # Thresholds shown
     with st.expander("🎛 Thresholds Used", expanded=False):
         st.json(analyzer.thresholds)
+
+
+def benchmark_metrics_chart(analyzer):
+    """
+    NOTE: These are dataset-level metrics from your pipeline.
+    They are shown during live testing as a benchmark reference,
+    but they do NOT change per single sentence (by definition).
+    """
+    st.markdown("## 📊 Benchmark Performance (Pipeline Results)")
+    st.caption("These are dataset-level metrics (n≈5,055). They cannot be recomputed from a single sentence.")
+
+    df = pd.DataFrame([
+        {"Model": m, **vals}
+        for m, vals in analyzer.benchmark_metrics.items()
+    ])
+
+    fig = go.Figure()
+    metrics = ["Accuracy", "Macro F1", "Negative F1"]
+
+    for metric in metrics:
+        fig.add_trace(go.Bar(
+            name=metric,
+            x=df["Model"],
+            y=df[metric],
+            text=[f"{v:.3f}" for v in df[metric]],
+            textposition="auto",
+        ))
+
+    fig.update_layout(
+        barmode="group",
+        height=420,
+        title="Accuracy, Macro-F1, Negative-F1 (Benchmark)",
+        yaxis_title="Score",
+        yaxis_range=[0, 0.7],
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        legend=dict(orientation="h", y=1.02, x=0.5, xanchor="center"),
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
 # =========================================================
@@ -617,12 +632,11 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline):
 
     examples = {
         "🎯 Select an example...": "",
+        "🐦 Twitter (Sarcastic Tail Not)": "Yeah right, like this product is gonna last more than a week. Amazing quality... not!",
         "🚗 Car Review (Mixed)": "The engine performance is absolutely terrible and unreliable. However, the seats are surprisingly comfortable and the fuel economy is excellent.",
         "💰 Finance News (Complex)": "Market crashed by 15% today due to economic concerns. However, analysts remain optimistic about long-term recovery prospects.",
-        "🐦 Twitter (Sarcastic)": "Yeah right, like this product is gonna last more than a week. Amazing quality... not!",
         "😠 Strong Negative": "This is the worst service I've ever experienced. Absolutely unacceptable and a complete waste of money!",
         "😊 Strong Positive": "Absolutely fantastic product! Exceeded all expectations and the customer service was brilliant!",
-        "🧠 Long Complex": "While the initial design and build quality are exceptional with premium materials used throughout, the software interface is frustratingly counter-intuitive and the battery life, though advertised as all-day, barely lasts through a morning of moderate use, which is disappointing given the high price point.",
     }
 
     col1, col2 = st.columns([2, 1])
@@ -646,10 +660,10 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline):
         )
 
     with col2:
-        st.markdown("### 🧭 What changes in Live mode?")
-        st.write("- **Scores** update per text (dynamic).")
-        st.write("- **Dataset metrics** are only in the Performance tab (static by design).")
-        st.write("- Enhanced lexicon now **activates phrases** like `smooth ride`, `market crashed`.")
+        st.markdown("### ✅ Key Fixes Applied")
+        st.write("- Multi-word phrases now **activate** (e.g., `market crashed`, `smooth ride`).")
+        st.write("- Sarcasm tail **“… not!” now flips to NEGATIVE** (not neutral).")
+        st.write("- Live charts show **current text scores** + benchmark metrics.")
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
@@ -702,12 +716,8 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline):
 
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-        # Legends
-        create_unified_legend(analyzer, "model_comparison")
-
         # ✅ LIVE SCORE CHART (dynamic, per input text)
         st.markdown("## 📌 Live Score Comparison (Current Text)")
-
         score_df = pd.DataFrame(
             {
                 "Model": ["TextBlob", "VADER (Base)", "VADER (Enhanced)"],
@@ -739,20 +749,23 @@ def create_single_analysis_tab(analyzer: EnhancedVADERPipeline):
         )
         st.plotly_chart(fig_live, use_container_width=True)
 
+        # ✅ BENCHMARK METRICS CHART (Accuracy/MacroF1/NegativeF1) shown when sentence tested
+        benchmark_metrics_chart(analyzer)
+
         # ✅ Explainability / Trace
         create_real_time_explanation(result, analyzer)
 
         details = result.get("vader_enhanced_details", {}) or {}
         sentence_scores = details.get("sentence_scores", [])
+        dom_idx = int(details.get("dominant_sentence_index", 0))
 
         if sentence_scores:
             st.markdown("### 🧾 Sentence-Level Breakdown (Enhanced VADER)")
             with st.expander("Show sentence scores + weights", expanded=True):
-                create_sentence_breakdown(sentence_scores, analyzer)
+                create_sentence_breakdown(sentence_scores, analyzer, dominant_index=dom_idx)
 
             # Summary table
             rows = []
-            dom_idx = int(details.get("dominant_sentence_index", 0))
             for i, sent in enumerate(sentence_scores):
                 rows.append(
                     {
@@ -772,13 +785,11 @@ def create_batch_analysis_tab(analyzer: EnhancedVADERPipeline):
     st.markdown("---")
 
     st.info(
-        "For batch *performance* (accuracy/F1), upload a CSV that contains a gold label column.\n\n"
-        "- Minimal columns: `text`\n"
-        "- For metrics: `text`, `gold_label` (gold_label in {negative, neutral, positive})"
+        "Upload a CSV/TXT for batch predictions.\n\n"
+        "If you also include `gold_label` (negative/neutral/positive), you can compute accuracy on your uploaded file."
     )
 
     uploaded_file = st.file_uploader("Upload CSV or TXT", type=["csv", "txt"])
-
     if not uploaded_file:
         return
 
@@ -797,25 +808,26 @@ def create_batch_analysis_tab(analyzer: EnhancedVADERPipeline):
 
         has_gold = "gold_label" in df.columns
         if has_gold:
-            st.success("✅ Detected `gold_label` column — metrics will be computed.")
+            st.success("✅ Detected `gold_label` column — simple accuracy will be computed.")
         else:
-            st.warning("No `gold_label` column detected — will only generate predictions (no accuracy/F1).")
+            st.warning("No `gold_label` column detected — predictions only.")
 
         if st.button("🚀 ANALYZE BATCH", type="primary", use_container_width=True):
             results = []
             progress = st.progress(0)
-            for i, t in enumerate(df[text_col].astype(str).tolist()):
+            texts = df[text_col].astype(str).tolist()
+
+            for i, t in enumerate(texts):
                 results.append(analyzer.analyze_text(t))
-                progress.progress((i + 1) / len(df))
+                progress.progress((i + 1) / len(texts))
 
             out = pd.DataFrame(results)
             st.success("🎉 Batch analysis complete.")
             st.dataframe(out.head(50), use_container_width=True)
 
-            # Optional: compute metrics if gold exists
+            # Optional: compute simple accuracy if gold exists
             if has_gold:
                 gold = df["gold_label"].astype(str).str.lower().str.strip()
-                # Basic sanity cleaning
                 gold = gold.replace({"pos": "positive", "neg": "negative", "neu": "neutral"})
                 valid = gold.isin(["negative", "neutral", "positive"])
                 gold = gold[valid]
@@ -824,18 +836,16 @@ def create_batch_analysis_tab(analyzer: EnhancedVADERPipeline):
                 def acc(y_true, y_pred):
                     return float((y_true.values == y_pred.values).mean()) if len(y_true) else 0.0
 
-                # Simple per-model accuracy (since sklearn not needed here)
                 acc_tb = acc(gold, out_valid["TextBlob"])
                 acc_vb = acc(gold, out_valid["VADER_Base"])
                 acc_ve = acc(gold, out_valid["VADER_Enhanced"])
 
-                st.markdown("### 📈 Batch Accuracy (from your uploaded gold labels)")
-                met1, met2, met3 = st.columns(3)
-                met1.metric("TextBlob Accuracy", f"{acc_tb:.3f}")
-                met2.metric("VADER (Base) Accuracy", f"{acc_vb:.3f}")
-                met3.metric("VADER (Enhanced) Accuracy", f"{acc_ve:.3f}")
+                st.markdown("### 📈 Batch Accuracy (Your Uploaded Gold Labels)")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("TextBlob", f"{acc_tb:.3f}")
+                m2.metric("VADER (Base)", f"{acc_vb:.3f}")
+                m3.metric("VADER (Enhanced)", f"{acc_ve:.3f}")
 
-            # Download
             csv = out.to_csv(index=False)
             st.download_button(
                 label="⬇️ DOWNLOAD RESULTS CSV",
@@ -852,45 +862,7 @@ def create_batch_analysis_tab(analyzer: EnhancedVADERPipeline):
 def create_performance_tab(analyzer: EnhancedVADERPipeline):
     st.markdown("## 📈 Performance Metrics (Dataset-level)")
     st.markdown("---")
-
-    create_unified_legend(analyzer, "model_comparison")
-
-    # Your pipeline results (static by design)
-    perf_df = pd.DataFrame(
-        {
-            "Model": ["TextBlob", "VADER (Base)", "VADER (Enhanced)"],
-            "Accuracy": [0.502, 0.540, 0.556],
-            "Macro F1": [0.471, 0.530, 0.542],
-            "Negative F1": [0.349, 0.485, 0.488],
-            "Positive F1": [0.512, 0.543, 0.561],
-        }
-    )
-
-    st.markdown("### 🎯 Test Set Performance (n=5,055)")
-    st.dataframe(perf_df, use_container_width=True)
-
-    # Bar chart (static, correct place)
-    st.markdown("### 📊 Performance Comparison (Static)")
-    categories = ["Accuracy", "Macro F1", "Negative F1", "Positive F1"]
-
-    fig = go.Figure()
-    for i, row in perf_df.iterrows():
-        fig.add_trace(
-            go.Bar(
-                name=row["Model"],
-                x=categories,
-                y=[row[c] for c in categories],
-            )
-        )
-    fig.update_layout(
-        barmode="group",
-        height=450,
-        yaxis_title="Score",
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        title="Pipeline Metrics (Static Reference)",
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    benchmark_metrics_chart(analyzer)
 
 
 # =========================================================
@@ -916,4 +888,3 @@ def main():
 
 if __name__ == "__main__":
     main()
- 
